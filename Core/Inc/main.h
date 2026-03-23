@@ -59,6 +59,10 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define SSD1351_RES_Pin GPIO_PIN_7
 #define SSD1351_RES_GPIO_Port GPIOB
+#define GPIO_BUTTON1_Pin GPIO_PIN_14
+#define GPIO_BUTTON1_GPIO_Port GPIOC
+#define GPIO_SRCLK_Pin GPIO_PIN_15
+#define GPIO_SRCLK_GPIO_Port GPIOC
 #define SSD1351_CS_Pin GPIO_PIN_0
 #define SSD1351_CS_GPIO_Port GPIOA
 #define SSD1351_SCL_Pin GPIO_PIN_1
@@ -67,6 +71,22 @@ void Error_Handler(void);
 #define SSD1351_SDA_GPIO_Port GPIOA
 #define SSD1351_DC_Pin GPIO_PIN_3
 #define SSD1351_DC_GPIO_Port GPIOA
+#define ADXL_X_Pin GPIO_PIN_4
+#define ADXL_X_GPIO_Port GPIOA
+#define ADXL_Y_Pin GPIO_PIN_5
+#define ADXL_Y_GPIO_Port GPIOA
+#define ADXL_Z_Pin GPIO_PIN_6
+#define ADXL_Z_GPIO_Port GPIOA
+#define BAT_VOL_Pin GPIO_PIN_7
+#define BAT_VOL_GPIO_Port GPIOA
+#define ADXL_ST_Pin GPIO_PIN_8
+#define ADXL_ST_GPIO_Port GPIOA
+#define GPIO_SRCLR_Pin GPIO_PIN_11
+#define GPIO_SRCLR_GPIO_Port GPIOA
+#define GPIO_SRDATA_Pin GPIO_PIN_12
+#define GPIO_SRDATA_GPIO_Port GPIOA
+#define GPIO_BUTTON2_Pin GPIO_PIN_6
+#define GPIO_BUTTON2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
