@@ -18,10 +18,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdint.h>
+#include <math.h>
+#include "ssd1351.h"
+#include "TiledDisplayRenderer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,6 +52,9 @@ TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
 
+volatile unsigned char TDR_DMA_READY = 1;
+int TDR_TPS = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,6 +70,14 @@ static void MX_TIM1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+	if (hspi->Instance == SPI1) {
+		TDR_DMA_READY = 1;
+		SSD1351_Unselect();
+		TDR_TPS++;
+	}
+	return;
+}
 
 /* USER CODE END 0 */
 
@@ -102,17 +115,126 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_Delay(300);
+  SSD1351_Unselect();
+  SSD1351_Init();
+  HAL_Delay(300);
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+	uint32_t steps = 0;
+	uint32_t maxsteps = 1000;
+	TDR_clear_screen();
+	int ones = (steps) % 10;
+	int tens = (steps / 10) % 10;
+	int hundreds = (steps / 100) % 10;
+	int thous = (steps / 1000) % 10;
+	uint16_t framecounter = 0;
+	uint32_t start = HAL_GetTick();
+	uint32_t now = HAL_GetTick();
+	uint32_t ms = 0;
 
-    /* USER CODE BEGIN 3 */
-  }
+#ifdef DEBUG
+	int32_t debug_ticker = 0;
+#endif
+	while (steps < maxsteps) {
+		/* USER CODE END WHILE */
+
+		/* USER CODE BEGIN 3 */
+		ones = (steps) % 10;
+		tens = (steps / 10) % 10;
+		hundreds = (steps / 100) % 10;
+		thous = (steps / 1000) % 10;
+
+		//	renderBackgroundCircle(steps, maxsteps);
+		//	//HAL_Delay(1000);
+		//	steps++;
+		//	if(steps > 100) {steps = 0;}
+		//TDR_ClearScreen();
+//	  renderBackgroundSolid(0x0000);
+//	  framecounter++;
+//	  renderBackgroundSolid(0xFFFF);
+//	  framecounter++;
+		if (steps > maxsteps) {
+			steps = 0;
+		}
+
+		TDR_draw_background_circle(steps, maxsteps);
+
+		TDR_draw_number_sprite(ones, 80, 60);
+		if (!ones) //ones is 0, update tens
+		{
+			TDR_draw_number_sprite(tens, 64, 60);
+			if (!tens) //tens is 0 update hundreds
+			{
+				TDR_draw_number_sprite(hundreds, 48, 60);
+				if (!hundreds) //tens is 0 update hundreds
+				{
+					TDR_draw_number_sprite(thous, 32, 60);
+				}
+			}
+
+		}
+
+		framecounter++;
+		//HAL_Delay(20);
+
+		now = HAL_GetTick(); //MILLISECOND TIMING CODE
+//	  ms = now - start;
+//	  start = now;
+//	  //timing stats
+//	  if (!(steps % 10))
+//	  {
+//		  ones = (ms) % 10;
+//		  	  tens = (ms / 10) % 10;
+//		  	  hundreds = (ms / 100) % 10;
+//		  	  thous = (ms / 1000) % 10;
+//		  	  TDR_draw_number_sprite(ones, 80, 44);
+//		  	  TDR_draw_number_sprite(tens, 64, 44);
+//		  	  TDR_draw_number_sprite(hundreds, 48, 44);
+//		  	  TDR_draw_number_sprite(thous, 32, 44);
+//	  }
+		steps++;
+
+		if (now - start > 1000) //DEBUG: FRAMERATE
+				{
+			//display framecounter
+			ones = (framecounter) % 10;
+			tens = (framecounter / 10) % 10;
+			hundreds = (framecounter / 100) % 10;
+			thous = (framecounter / 1000) % 10;
+			TDR_draw_number_sprite(ones, 80, 44);
+			TDR_draw_number_sprite(tens, 64, 44);
+			TDR_draw_number_sprite(hundreds, 48, 44);
+			TDR_draw_number_sprite(thous, 32, 44);
+			start = now;
+			framecounter = 0;
+			TDR_TPS = 0;
+		}
+
+
+
+#ifdef DEBUG
+		if (debug_ticker%5 == 0){
+			TDR_draw_string("DEBUG BUILD", 0, 0, 0);
+		}
+		debug_ticker++;
+#endif
+
+	}
+	TDR_draw_background_circle(10000, 10000);
+	//END WHILE
+	int counter = 0;
+	while(1)
+	{
+		TDR_draw_string("According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossible.", 0, -counter*16, 1);
+		//TDR_draw_string("step count\nreached!", cosf((double)HAL_GetTick()/1000.0) * 24 + 24, sinf((double)HAL_GetTick()/1000.0) * 48 + 48, 0);
+		//TDR_clear_screen();
+		HAL_Delay(1000);
+		counter++;
+	}
   /* USER CODE END 3 */
 }
 
