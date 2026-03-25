@@ -320,6 +320,7 @@ static void TDR_drawtile_circle_progress(uint32_t steps, uint32_t maxsteps, uint
 
 		break;
 	default:
+		return;
 		break;
 	}
 
@@ -533,6 +534,7 @@ void TDR_draw_string(const char* s, int32_t startx, int32_t starty, uint8_t wrap
 	{
 		//newline
 		if (s[i] == '\n') {ss_x = startx; ss_y += 16; continue;}
+		if (s[i] == '\0') {return;}
 		if (ss_y > 127) {break;}
 		if (ss_x > 121 && wraparound) { ss_x = 0; ss_y+=16; }
 		clearTileHalf();

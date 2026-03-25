@@ -22,6 +22,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
 #include <math.h>
+#include <stdlib.h>
 #include "ssd1351.h"
 #include "TiledDisplayRenderer.h"
 /* USER CODE END Includes */
@@ -55,6 +56,10 @@ TIM_HandleTypeDef htim1;
 volatile unsigned char TDR_DMA_READY = 1;
 int TDR_TPS = 0;
 
+# define ADC_BUFFER_SIZE 128
+
+volatile uint16_t ADC_Data[ADC_BUFFER_SIZE];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -77,6 +82,19 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
 		TDR_TPS++;
 	}
 	return;
+}
+
+// Called when first half of buffer is filled
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
+
+}
+
+// Called when buffer is completely filled
+volatile char usermessage[24];
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+	char data[4];
+	itoa(ADC_Data[0], data, 10);
+	strcpy(usermessage, data);
 }
 
 /* USER CODE END 0 */
@@ -136,6 +154,12 @@ int main(void)
 	uint32_t now = HAL_GetTick();
 	uint32_t ms = 0;
 
+	HAL_ADCEx_Calibration_Start(&hadc1);
+
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Data, ADC_BUFFER_SIZE);
+
+	HAL_TIM_Base_Start(&htim1);
+
 #ifdef DEBUG
 	int32_t debug_ticker = 0;
 #endif
@@ -175,8 +199,9 @@ int main(void)
 					TDR_draw_number_sprite(thous, 32, 60);
 				}
 			}
-
 		}
+
+		TDR_draw_string(usermessage, 0, 0, 0);
 
 		framecounter++;
 		//HAL_Delay(20);
@@ -307,12 +332,12 @@ static void MX_ADC1_Init(void)
   hadc1.Init.LowPowerAutoPowerOff = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = ENABLE;
   hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO2;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_12CYCLES_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -430,9 +455,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 64;
+  htim1.Init.Prescaler = 1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
+  htim1.Init.Period = 128;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
