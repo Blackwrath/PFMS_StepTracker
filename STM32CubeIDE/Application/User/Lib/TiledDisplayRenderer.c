@@ -140,7 +140,7 @@ static void clearTile()
 
 }
 
-static void clearTileHalf()
+static inline void clearTileHalf()
 {
 	//32bit clearing
 #if OPT_32BIT_CLEARING
@@ -445,8 +445,8 @@ static void renderTile(uint8_t tile_x, uint8_t tile_y, uint16_t colour)
 
 void TDR_draw_background_circle(uint32_t steps, uint32_t maxsteps)
 {
-	uint32_t check = (steps * 100) / maxsteps;
-	if (check == completeness) {return;} //another optimisation
+	uint32_t check = (steps * 200) / maxsteps;
+	if (check == completeness) {return;} //another optimisation, only works at high SPI speed
 	completeness = check;
 	for (uint8_t i = 0; i < 8; ++i) //vertical tile
 	{
@@ -534,7 +534,7 @@ void TDR_draw_string(const char* s, int32_t startx, int32_t starty, uint8_t wrap
 	{
 		//newline
 		if (s[i] == '\n') {ss_x = startx; ss_y += 16; continue;}
-		if (s[i] == '\0') {return;}
+		//if (s[i] == '\0') {return;}
 		if (ss_y > 127) {break;}
 		if (ss_x > 121 && wraparound) { ss_x = 0; ss_y+=16; }
 		clearTileHalf();
