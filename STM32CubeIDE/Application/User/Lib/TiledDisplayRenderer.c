@@ -10,6 +10,7 @@
 #include <string.h>
 #include "TiledDisplayRenderer.h"
 
+#include "stm32c011xx.h"
 
 # define TDR_MAX(a,b) ((a) > (b) ? (a) : (b))
 # define TDR_MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -64,6 +65,43 @@ __attribute__((section(".rodata"))) const char FONT_ASCII_HALF[] = {0x00,0x00,0x
 
 const int TAN_LOOKUP_65536[102] = {-2147483648, -2106256, -1052108, -700272, -524013, -417984, -347069, -296219, -257908, -227956, -203854, -184006, -167347, -153140, -140860, -130118, -120627, -112164, -104557, -97669, -91392, -85637, -80332, -75416, -70841, -66563, -62547, -58763, -55184, -51788, -48555, -45468, -42511, -39671, -36936, -34296, -31740, -29259, -26847, -24496, -22199, -19949, -17742, -15572, -13433, -11322, -9233, -7163, -5106, -3059, -1019, 1019, 3059, 5106, 7163, 9233, 11322, 13433, 15572, 17742, 19949, 22199, 24496, 26847, 29259, 31740, 34296, 36936, 39671, 42511, 45468, 48555, 51788, 55184, 58763, 62547, 66563, 70841, 75416, 80332, 85637, 91392, 97669, 104557, 112164, 120627, 130118, 140860, 153140, 167347, 184006, 203854, 227956, 257908, 296219, 347069, 417984, 524013, 700272, 1052108, 2106256, -2147483647};
 
+
+# define TDR_LIGHTNING_ENABLE 1
+#if TDR_LIGHTNING_ENABLE
+static inline void TDR_LIGHTNING(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+{
+	__ASM volatile ("cpsid i" : : : "memory"); //disable interrupts
+
+	*(volatile uint8_t*)&hspi1.Instance->DR = 0x15; //set column
+	GPIOA->BSRR = (SSD1351_DC_Pin << 16); // dc low
+
+	while (SPI1->SR & SPI_SR_BSY);
+
+	hspi1.Instance->DR = (x1 << 8 | x0); //set column address
+	GPIOA->BSRR = (SSD1351_DC_Pin << 0); //dc high
+
+	while (SPI1->SR & SPI_SR_BSY);
+
+	*(volatile uint8_t*)&hspi1.Instance->DR = 0x75; //set row
+	GPIOA->BSRR = (SSD1351_DC_Pin << 16); // dc low
+
+	while (SPI1->SR & SPI_SR_BSY);
+
+	hspi1.Instance->DR =  (y1 << 8 | y0); //set row address
+	GPIOA->BSRR = (SSD1351_DC_Pin << 0); //dc high
+
+	while (SPI1->SR & SPI_SR_BSY);
+
+	*(volatile uint8_t*)&hspi1.Instance->DR = 0x5C; //writeram
+	GPIOA->BSRR = (SSD1351_DC_Pin << 16); //write command
+
+	while (SPI1->SR & SPI_SR_BSY);
+
+	__ASM volatile ("cpsie i" : : : "memory"); //enable interrupts
+	return;
+}
+#endif
+
 static void TDR_DMA_FIRE(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint32_t confirm)
 {
 	if(TDR_DMA_SAFETY_CHECKS)
@@ -111,7 +149,11 @@ static void TDR_DMA_FIRE(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint32_
 	}
 	else
 	{
+#if !TDR_LIGHTNING_ENABLE
 		SSD1351_SetAddressWindow(x, y, x+w-1, y+h-1);
+#else
+		TDR_LIGHTNING(x, y, x+w-1, y+h-1);
+#endif
 	}
 
 	//SSD1351_SetAddressWindow(0, 0, 15, 15);
@@ -425,7 +467,7 @@ static void renderTile(uint8_t tile_x, uint8_t tile_y, uint16_t colour)
 #if OPT_32BIT_CLEARING
 	uint32_t colour32 = ((uint32_t)colour << 16) | colour;
 	uint32_t *ptr = (uint32_t*)displayTile_backBuffer;
-	for (int i = 0; i < 127; i++)
+	for (int i = 0; i < 128; i++)
 	{
 		ptr[i] = colour32;
 	}
