@@ -21,6 +21,7 @@ int32_t tan_approx(int32_t input);
 //void generateDrawBackgroundTile(uint32_t steps, uint32_t maxsteps, uint8_t tile_x, uint8_t tile_y);
 void TDR_draw_background_circle(uint32_t steps, uint32_t maxsteps);
 void TDR_draw_number_sprite(uint16_t number, uint8_t startx, uint8_t starty);
+void TDR_draw_number_small(int16_t number, uint8_t startx, uint8_t starty);
 void TDR_render_background_solid(uint16_t colour);
 void TDR_clear_screen(void);
 void TDR_draw_string(const char* s, int32_t startx, int32_t starty, uint8_t wraparound);

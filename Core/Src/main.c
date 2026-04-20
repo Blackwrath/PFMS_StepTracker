@@ -191,7 +191,8 @@ int main(void)
 	while (steps < maxsteps) {
 		EMS_ADC_READ();
 		/*************************** Self-Test Sequence**********************************/
-		if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
+		if (1)
+		//if (1)
 		{
 		    ADXL_ST_Routine();
 
@@ -656,6 +657,8 @@ void ADXL_ST_Routine(void)
         dy = y_st - y_normal;
         dz = z_st - z_normal;
 
+
+
         // Check limits
         if ((dx > 50 && dx < 800) &&
             (dy > 50 && dy < 800) &&
@@ -682,6 +685,18 @@ void ADXL_ST_Routine(void)
                 retry = 0;
             }
         }
+
+        TDR_draw_number_small(x_normal, 0, 16);
+                TDR_draw_number_small(y_normal, 0, 32);
+                TDR_draw_number_small(z_normal, 0, 48);
+
+                TDR_draw_number_small(x_st, 40, 16);
+                TDR_draw_number_small(y_st, 40, 32);
+                TDR_draw_number_small(z_st, 40, 48);
+
+                TDR_draw_number_small(dx, 80, 16);
+                TDR_draw_number_small(dy, 80, 32);
+                TDR_draw_number_small(dz, 80, 48);
     }
 }
 

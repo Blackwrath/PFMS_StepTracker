@@ -562,6 +562,17 @@ void TDR_draw_number_sprite(uint16_t number, uint8_t startx, uint8_t starty)
 #endif
 }
 
+void TDR_draw_number_small(int16_t number, uint8_t startx, uint8_t starty)
+{
+	if (number > 9999)
+	{
+		number = 9999;
+	}
+	char data[6] = {0};
+	itoa(number, data, 10);
+	TDR_draw_string(data, startx, starty, 0);
+}
+
 void TDR_draw_string(const char* s, int32_t startx, int32_t starty, uint8_t wraparound) //half width characters
 {
 
