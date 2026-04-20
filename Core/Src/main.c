@@ -56,9 +56,7 @@ TIM_HandleTypeDef htim1;
 volatile unsigned char TDR_DMA_READY = 1;
 int TDR_TPS = 0;
 
-# define ADC_BUFFER_SIZE 128
 
-volatile uint16_t ADC_Data[ADC_BUFFER_SIZE];
 
 /* USER CODE END PV */
 
@@ -70,6 +68,11 @@ static void MX_SPI1_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
+void ST_Enable(void);
+void ST_Disable(void);
+uint16_t Read_ADC_Channel(uint32_t channel);
+void Read_Accelerometer(uint16_t *x, uint16_t *y, uint16_t *z);
+void ADXL_ST_Routine(void);
 
 /* USER CODE END PFP */
 
@@ -90,13 +93,35 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
 }
 
 // Called when buffer is completely filled
+# define ADC_BUFFER_SIZE 4
+
+volatile uint16_t ADC_Data[ADC_BUFFER_SIZE];
+volatile uint16_t ADC_Data_Good[ADC_BUFFER_SIZE];
 volatile char usermessage[24];
+
+volatile char ADC_DATA_REQUEST = 0;
+volatile char ADC_DATA_READY = 0;
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-	char data[4];
-	itoa(ADC_Data[0], data, 10);
-	strcpy(usermessage, data);
+//	char data[4];
+//	itoa(ADC_Data[0], data, 10);
+//	strcpy(usermessage, data);
+	if (ADC_DATA_REQUEST == 1)
+	{
+		ADC_DATA_READY = 0;
+		ADC_DATA_REQUEST = 0;
+		for (int i = 0; i < ADC_BUFFER_SIZE; i++)
+		{
+			ADC_Data_Good[i] = ADC_Data[i];
+		}
+		ADC_DATA_READY = 1;
+	}
 }
 
+void EMS_ADC_READ() //triggers read into ADC_Data_Good, waits for return
+{
+	ADC_DATA_REQUEST = 1;
+	while(ADC_DATA_READY == 0);
+}
 /* USER CODE END 0 */
 
 /**
@@ -164,6 +189,16 @@ int main(void)
 	int32_t debug_ticker = 0;
 #endif
 	while (steps < maxsteps) {
+		EMS_ADC_READ();
+		/*************************** Self-Test Sequence**********************************/
+		if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
+		{
+		    ADXL_ST_Routine();
+
+		    HAL_Delay(1000);   // Let user see result
+		    TDR_clear_screen(); // Clear before resuming
+		}
+		/*********************************************************************************/
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -420,7 +455,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -456,7 +491,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 1;
+  htim1.Init.Prescaler = 64;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 128;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -573,6 +608,82 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void ST_Enable(void)
+{
+    HAL_GPIO_WritePin(GPIOA, ADXL_ST_Pin, GPIO_PIN_RESET);
+}
+
+void ST_Disable(void)
+{
+    HAL_GPIO_WritePin(GPIOA, ADXL_ST_Pin, GPIO_PIN_SET);
+}
+
+void ADXL_ST_Routine(void)
+{
+    uint16_t x_normal, y_normal, z_normal;
+    uint16_t x_st, y_st, z_st;
+    int16_t dx, dy, dz;
+
+    uint8_t retry = 1;
+
+    while (retry)
+    {
+        // Normal mode
+        ST_Disable();
+        HAL_Delay(20);
+
+        HAL_Delay(20);
+        //Read_Accelerometer(&x_normal, &y_normal, &z_normal);
+        EMS_ADC_READ();
+        x_normal = ADC_Data_Good[0];
+        y_normal = ADC_Data_Good[1];
+        z_normal = ADC_Data_Good[2];
+
+
+        // Enable self-test
+        ST_Enable();
+        HAL_Delay(20);
+
+        HAL_Delay(20);
+        //Read_Accelerometer(&x_st, &y_st, &z_st);
+        EMS_ADC_READ();
+        x_st = ADC_Data_Good[0];
+        y_st = ADC_Data_Good[1];
+        z_st = ADC_Data_Good[2];
+
+        // Calculate difference
+        dx = x_st - x_normal;
+        dy = y_st - y_normal;
+        dz = z_st - z_normal;
+
+        // Check limits
+        if ((dx > 50 && dx < 800) &&
+            (dy > 50 && dy < 800) &&
+            (dz > 50 && dz < 800))
+        {
+            TDR_clear_screen();
+            TDR_draw_string("SELF TEST PASS", 0, 0, 1);
+
+            ST_Disable();
+            retry = 0;
+        }
+        else
+        {
+            TDR_clear_screen();
+            TDR_draw_string("SELF TEST FAIL", 0, 0, 1);
+
+            if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
+            {
+                retry = 1;
+            }
+            else
+            {
+                ST_Disable();
+                retry = 0;
+            }
+        }
+    }
+}
 
 /* USER CODE END 4 */
 
