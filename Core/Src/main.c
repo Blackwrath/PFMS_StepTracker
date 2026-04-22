@@ -93,10 +93,10 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
 }
 
 // Called when buffer is completely filled
-# define ADC_BUFFER_SIZE 4
+# define ADC_BUFFER_SIZE 4 * 1
 
 volatile uint16_t ADC_Data[ADC_BUFFER_SIZE];
-volatile uint16_t ADC_Data_Good[ADC_BUFFER_SIZE];
+volatile uint16_t ADC_Data_Good[4];
 volatile char usermessage[24];
 
 volatile char ADC_DATA_REQUEST = 0;
@@ -107,13 +107,32 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //	strcpy(usermessage, data);
 	if (ADC_DATA_REQUEST == 1)
 	{
-		ADC_DATA_READY = 0;
-		ADC_DATA_REQUEST = 0;
+//		ADC_DATA_READY = 0;
+//		ADC_DATA_REQUEST = 0;
+//		for (int i = 0; i < ADC_BUFFER_SIZE; i++)
+//		{
+//			ADC_Data_Good[i] = ADC_Data[i];
+//		}
+		ADC_Data_Good[0] = 0;
+		ADC_Data_Good[1] = 0;
+		ADC_Data_Good[2] = 0;
+		ADC_Data_Good[3] = 0;
+
 		for (int i = 0; i < ADC_BUFFER_SIZE; i++)
 		{
-			ADC_Data_Good[i] = ADC_Data[i];
+			ADC_Data_Good[i%4] += ADC_Data[i];
 		}
+
+		ADC_Data_Good[0] = ADC_Data_Good[0] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Good[1] = ADC_Data_Good[1] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Good[2] = ADC_Data_Good[2] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Good[3] = ADC_Data_Good[3] / (ADC_BUFFER_SIZE / 4);
+
+
 		ADC_DATA_READY = 1;
+
+
+		//data averaging
 	}
 }
 
@@ -188,11 +207,15 @@ int main(void)
 #ifdef DEBUG
 	int32_t debug_ticker = 0;
 #endif
+	//ATTENTION ALL CONTRIBUTORS: THE WHILE LOOP STARTS HERE
 	while (steps < maxsteps) {
 		EMS_ADC_READ();
+		TDR_draw_number_small(ADC_Data_Good[0], 0, 0);
+		TDR_draw_number_small(ADC_Data_Good[1], 0, 16);
+		TDR_draw_number_small(ADC_Data_Good[2], 0, 32);
 		/*************************** Self-Test Sequence**********************************/
-		//if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
-		if (1)
+		if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
+		//if (1)
 		{
 		    ADXL_ST_Routine();
 
@@ -237,7 +260,7 @@ int main(void)
 			}
 		}
 
-		TDR_draw_string(usermessage, 0, 0, 0);
+		//TDR_draw_string(usermessage, 0, 0, 0);
 
 		framecounter++;
 		//HAL_Delay(20);
@@ -293,8 +316,12 @@ int main(void)
 		//TDR_draw_string("According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossible. Yellow, black. Yellow, black. Yellow, black. Yellow, black. Ooh, black and yellow! Let's shake it up a little. Barry! Breakfast is ready! Coming! Hang on a second. Hello? Barry? Adam? Can you believe this is happening? I can't. I'll pick you up. Looking sharp. Use the stairs, Your father paid good money for those. Sorry. I'm excited. Here's the graduate. We're very proud of you, son. A perfect report card, all B's. Very proud. Ma! I got a thing going here. You got lint on your fuzz. Ow! That's me! Wave to us! We'll be in row 118,000. Bye! Barry, I told you, stop flying in the house! Hey, Adam. Hey, Barry. Is that fuzz gel? A little. Special day, graduation. Never thought I'd make it. Three days grade school, three days high school. Those were awkward. Three days college. I'm glad I took a day and hitchhiked around The Hive. You did come back different. Hi, Barry. Artie, growing a mustache? Looks good. Hear about Frankie? Yeah. You going to the funeral? No, I'm not going. Everybody knows, sting someone, you die. Don't waste it on a squirrel. Such a hothead. I guess he could have just gotten out of the way. I love this incorporating an amusement park into our day. That's why we don't need vacations. Boy, quite a bit of pomp under the circumstances.", 0, -counter*16, 1);
 		//TDR_draw_string("step count\nreached!", cosf((double)HAL_GetTick()/1000.0) * 24 + 24, sinf((double)HAL_GetTick()/1000.0) * 48 + 48, 0);
 		//TDR_clear_screen();
-		TDR_draw_string(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~", 0, -counter*16, 1);
-		HAL_Delay(1000);
+		TDR_draw_string("FONT TEST\n !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~", 0, -counter*16, 1);
+		HAL_Delay(3000);
+		TDR_clear_screen();
+		ADXL_ST_Routine();
+		HAL_Delay(3000);   // Let user see result
+		TDR_clear_screen();
 		//counter++;
 	}
   /* USER CODE END 3 */
@@ -375,7 +402,10 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
-  hadc1.Init.OversamplingMode = DISABLE;
+  hadc1.Init.OversamplingMode = ENABLE;
+  hadc1.Init.Oversampling.Ratio = 16;
+  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_2;
+  hadc1.Init.Oversampling.TriggeredMode = 0;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -611,12 +641,12 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void ST_Enable(void)
 {
-    HAL_GPIO_WritePin(GPIOA, ADXL_ST_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, ADXL_ST_Pin, GPIO_PIN_SET);
 }
 
 void ST_Disable(void)
 {
-    HAL_GPIO_WritePin(GPIOA, ADXL_ST_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOA, ADXL_ST_Pin, GPIO_PIN_RESET);
 }
 
 void ADXL_ST_Routine(void)
