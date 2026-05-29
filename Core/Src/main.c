@@ -116,20 +116,20 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //		{
 //			ADC_Data_Good[i] = ADC_Data[i];
 //		}
-		ADC_Data_Good[0] = 0;
-		ADC_Data_Good[1] = 0;
-		ADC_Data_Good[2] = 0;
-		ADC_Data_Good[3] = 0;
+//		ADC_Data_Good[0] = 0;
+//		ADC_Data_Good[1] = 0;
+//		ADC_Data_Good[2] = 0;
+//		ADC_Data_Good[3] = 0;
 
-		for (int i = 0; i < ADC_BUFFER_SIZE; i++)
+		for (int i = 0; i < 4; i++)
 		{
-			ADC_Data_Good[i%4] += ADC_Data[i];
+			ADC_Data_Good[i] = ADC_Data[i];
 		}
 
-		ADC_Data_Good[0] = ADC_Data_Good[0] / (ADC_BUFFER_SIZE / 4);
-		ADC_Data_Good[1] = ADC_Data_Good[1] / (ADC_BUFFER_SIZE / 4);
-		ADC_Data_Good[2] = ADC_Data_Good[2] / (ADC_BUFFER_SIZE / 4);
-		ADC_Data_Good[3] = ADC_Data_Good[3] / (ADC_BUFFER_SIZE / 4);
+//		ADC_Data_Good[0] = ADC_Data_Good[0] / (ADC_BUFFER_SIZE / 4);
+//		ADC_Data_Good[1] = ADC_Data_Good[1] / (ADC_BUFFER_SIZE / 4);
+//		ADC_Data_Good[2] = ADC_Data_Good[2] / (ADC_BUFFER_SIZE / 4);
+//		ADC_Data_Good[3] = ADC_Data_Good[3] / (ADC_BUFFER_SIZE / 4);
 
 
 		ADC_DATA_READY = 1;
@@ -179,6 +179,7 @@ int main(void)
   MX_SPI1_Init();
   MX_ADC1_Init();
   MX_TIM1_Init();
+  HAL_ADCEx_Calibration_Start(&hadc1);
   /* USER CODE BEGIN 2 */
   HAL_Delay(300);
   SSD1351_Unselect();
@@ -201,7 +202,7 @@ int main(void)
 	uint32_t now = HAL_GetTick();
 	uint32_t ms = 0;
 
-	HAL_ADCEx_Calibration_Start(&hadc1);
+
 
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Data, ADC_BUFFER_SIZE);
 
@@ -213,7 +214,7 @@ int main(void)
 
 	/* Write Channels: Ch0=Full, Ch1=Half, Ch2=Off */
 	/* 12-bit range: 0 to 4095 */
-	TLC5973_WriteChannels(&hTLC5973, 4095, 2047, 0);
+	TLC5973_WriteChannels(&hTLC5973, 4095, 4095, 4095);
 
 #ifdef DEBUG
 	int32_t debug_ticker = 0;
@@ -228,6 +229,7 @@ int main(void)
 		if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
 		//if (1)
 		{
+			TDR_clear_screen(); // Clear before resuming
 		    ADXL_ST_Routine();
 
 		    HAL_Delay(1000);   // Let user see result
@@ -255,7 +257,7 @@ int main(void)
 			steps = 0;
 		}
 
-		TLC5973_WriteChannels(&hTLC5973, 0,0,0);
+		TLC5973_WriteChannels(&hTLC5973, 4000,4000,4000);
 
 		TDR_draw_background_circle(steps, maxsteps);
 
@@ -414,10 +416,10 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
-  hadc1.Init.OversamplingMode = ENABLE;
-  hadc1.Init.Oversampling.Ratio = 16;
-  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
+  hadc1.Init.OversamplingMode = DISABLE;
+  hadc1.Init.Oversampling.Ratio = 1;
+  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_NONE;
   hadc1.Init.Oversampling.TriggeredMode = 0;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -691,10 +693,10 @@ void ADXL_ST_Routine(void)
         // Normal mode
         ST_Disable();
         HAL_Delay(20);
-
+        EMS_ADC_READ();
         HAL_Delay(20);
         //Read_Accelerometer(&x_normal, &y_normal, &z_normal);
-        EMS_ADC_READ();
+
         x_normal = ADC_Data_Good[0];
         y_normal = ADC_Data_Good[1];
         z_normal = ADC_Data_Good[2];
@@ -703,10 +705,10 @@ void ADXL_ST_Routine(void)
         // Enable self-test
         ST_Enable();
         HAL_Delay(20);
-
+        EMS_ADC_READ();
         HAL_Delay(20);
         //Read_Accelerometer(&x_st, &y_st, &z_st);
-        EMS_ADC_READ();
+
         x_st = ADC_Data_Good[0];
         y_st = ADC_Data_Good[1];
         z_st = ADC_Data_Good[2];

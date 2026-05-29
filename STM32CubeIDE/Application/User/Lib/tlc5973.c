@@ -161,6 +161,7 @@ void TLC5973_Init(TLC5973_HandleTypeDef *hdev, GPIO_TypeDef *port, uint16_t pin,
 void TLC5973_WriteChannels(TLC5973_HandleTypeDef *hdev, uint16_t ch0, uint16_t ch1, uint16_t ch2) {
     /* 1. Send tCYCLE measurement sequence */
 	__ASM volatile ("cpsid i" : : : "memory"); //disable interrupts
+	uint64_t gs_stream = ((uint64_t)ch0 << 24) | ((uint32_t)ch1 << 12) | (uint32_t)ch2;
     TLC5973_SendCycle(hdev);
 
     /* 2. Send Command 0x3AA (10 bits) */
@@ -169,7 +170,7 @@ void TLC5973_WriteChannels(TLC5973_HandleTypeDef *hdev, uint16_t ch0, uint16_t c
     /* 3. Send GS Data (36 bits) */
     /* Pack channels: Ch0[11:0] Ch1[11:0] Ch2[11:0] */
     /* Shift Ch0 to bits 35-24, Ch1 to 23-12, Ch2 to 11-0 */
-    uint64_t gs_stream = ((uint64_t)ch0 << 24) | ((uint32_t)ch1 << 12) | (uint32_t)ch2;
+
 
     TLC5973_SendBits(hdev, (uint32_t)(gs_stream >> 12), 24); /* Upper 24 bits */
     TLC5973_SendBits(hdev, (uint32_t)gs_stream, 12);        /* Lower 12 bits */
