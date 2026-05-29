@@ -20,12 +20,12 @@ typedef struct {
 
 /* Default Timing Constants */
 #define TLC5973_DEFAULT_tCYCLE_US  200
-#define TLC5973_DEFAULT_tEDGE_US   20
+#define TLC5973_DEFAULT_tEDGE_US   5
 #define TLC5973_DEFAULT_tH0_US     1600
 
-#define TLC5973_DELAY_STAGE1  30
+#define TLC5973_DELAY_STAGE1  10
 #define TLC5973_DELAY_STAGE2  TLC5973_DEFAULT_tEDGE_US
-#define TLC5973_DELAY_STAGE3  150
+#define TLC5973_DELAY_STAGE3  10
 
 /* Protocol Constants */
 #define TLC5973_CMD_3AA            0x3AA  /* 10-bit command: 0b1110101010 */
