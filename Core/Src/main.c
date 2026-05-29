@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include "ssd1351.h"
 #include "TiledDisplayRenderer.h"
+#include "tlc5973.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,6 +51,8 @@ SPI_HandleTypeDef hspi1;
 DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim1;
+
+TLC5973_HandleTypeDef hTLC5973;
 
 /* USER CODE BEGIN PV */
 
@@ -204,6 +207,14 @@ int main(void)
 
 	HAL_TIM_Base_Start(&htim1);
 
+	/* Initialize TLC5973 */
+	/* Using 2.0 us tCYCLE */
+	TLC5973_Init(&hTLC5973, GPIO_SRDATA_GPIO_Port, GPIO_SRDATA_Pin, 1000);
+
+	/* Write Channels: Ch0=Full, Ch1=Half, Ch2=Off */
+	/* 12-bit range: 0 to 4095 */
+	TLC5973_WriteChannels(&hTLC5973, 4095, 2047, 0);
+
 #ifdef DEBUG
 	int32_t debug_ticker = 0;
 #endif
@@ -243,6 +254,8 @@ int main(void)
 		if (steps > maxsteps) {
 			steps = 0;
 		}
+
+		TLC5973_WriteChannels(&hTLC5973, 0,0,0);
 
 		TDR_draw_background_circle(steps, maxsteps);
 
@@ -404,7 +417,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
   hadc1.Init.OversamplingMode = ENABLE;
   hadc1.Init.Oversampling.Ratio = 16;
-  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_2;
+  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_5;
   hadc1.Init.Oversampling.TriggeredMode = 0;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -590,13 +603,13 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(SSD1351_RES_GPIO_Port, SSD1351_RES_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIO_SRCLK_GPIO_Port, GPIO_SRCLK_Pin, GPIO_PIN_RESET);
+//  HAL_GPIO_WritePin(GPIO_SRCLK_GPIO_Port, GPIO_SRCLK_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SSD1351_CS_GPIO_Port, SSD1351_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, SSD1351_DC_Pin|ADXL_ST_Pin|GPIO_SRCLR_Pin|GPIO_SRDATA_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, SSD1351_DC_Pin|ADXL_ST_Pin|GPIO_SRDATA_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : SSD1351_RES_Pin */
   GPIO_InitStruct.Pin = SSD1351_RES_Pin;
@@ -605,33 +618,49 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SSD1351_RES_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : GPIO_BUTTON1_Pin */
-  GPIO_InitStruct.Pin = GPIO_BUTTON1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIO_BUTTON1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : GPIO_SRCLK_Pin */
-  GPIO_InitStruct.Pin = GPIO_SRCLK_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIO_SRCLK_GPIO_Port, &GPIO_InitStruct);
+
+//  /*Configure GPIO pin : GPIO_SRCLK_Pin */
+//  GPIO_InitStruct.Pin = GPIO_SRCLK_Pin;
+//  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+//  GPIO_InitStruct.Pull = GPIO_NOPULL;
+//  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+//  HAL_GPIO_Init(GPIO_SRCLK_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SSD1351_CS_Pin SSD1351_DC_Pin ADXL_ST_Pin GPIO_SRCLR_Pin
                            GPIO_SRDATA_Pin */
-  GPIO_InitStruct.Pin = SSD1351_CS_Pin|SSD1351_DC_Pin|ADXL_ST_Pin|GPIO_SRCLR_Pin
+  GPIO_InitStruct.Pin = SSD1351_CS_Pin|SSD1351_DC_Pin|ADXL_ST_Pin
                           |GPIO_SRDATA_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : GPIO_BUTTON1_Pin */
+  GPIO_InitStruct.Pin = GPIO_BUTTON1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIO_BUTTON1_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : GPIO_BUTTON2_Pin */
   GPIO_InitStruct.Pin = GPIO_BUTTON2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIO_BUTTON2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : GPIO_BUTTON2_Pin */
+  GPIO_InitStruct.Pin = GPIO_BUTTON3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIO_BUTTON3_GPIO_Port, &GPIO_InitStruct);
+
+
+  /*Configure GPIO pin : GPIO_BUTTON2_Pin */
+  GPIO_InitStruct.Pin = GPIO_BUTTON4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIO_BUTTON4_GPIO_Port, &GPIO_InitStruct);
+
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
