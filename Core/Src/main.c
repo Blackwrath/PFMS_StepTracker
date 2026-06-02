@@ -106,8 +106,8 @@ volatile char usermessage[24];
 volatile char ADC_DATA_REQUEST = 0;
 volatile char ADC_DATA_READY = 0;
 
-Vector3 calib_data = {.x=0,.y=0,.z=0};
-
+__attribute__((section(".flash_rw_area"))) Vector3 calib_data_FLASH;
+Vector3 calib_data_RAM = {.x=0,.y=0,.z=0};
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //	char data[4];
 //	itoa(ADC_Data[0], data, 10);
@@ -210,6 +210,8 @@ int main(void)
 
 
 
+
+
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Data, ADC_BUFFER_SIZE);
 
 	HAL_TIM_Base_Start(&htim1);
@@ -217,6 +219,26 @@ int main(void)
 	/* Initialize TLC5973 */
 	/* Using 2.0 us tCYCLE */
 	TLC5973_Init(&hTLC5973, GPIO_SRDATA_GPIO_Port, GPIO_SRDATA_Pin, 1000);
+
+	TDR_draw_string("CALIB DATA FLASH", 0, 0, 0);
+	HAL_Delay(300);
+	sprintf(usermessage, "%u", calib_data_FLASH.x);
+	TDR_draw_string(usermessage, 0, 16, 0);
+	HAL_Delay(300);
+	sprintf(usermessage, "%u", calib_data_FLASH.y);
+	TDR_draw_string(usermessage, 0, 32, 0);
+	HAL_Delay(300);
+	sprintf(usermessage, "%u", calib_data_FLASH.z);
+	TDR_draw_string(usermessage, 0, 48, 0);
+	HAL_Delay(300);
+
+	calib_data_RAM.x = calib_data_FLASH.x;
+	calib_data_RAM.y = calib_data_FLASH.y;
+	calib_data_RAM.z = calib_data_FLASH.z;
+	TDR_draw_string("Loaded!", 0, 64, 0);
+
+	HAL_Delay(1000);
+	TDR_clear_screen();
 
 	/* Write Channels: Ch0=Full, Ch1=Half, Ch2=Off */
 	/* 12-bit range: 0 to 4095 */
@@ -276,9 +298,9 @@ int main(void)
 
 		//colours to calib data
 		int32_t cx,cy,cz;
-		cx = abs((int32_t)ADC_Data_Good[0] - calib_data.x);
-		cy = abs((int32_t)ADC_Data_Good[1] - calib_data.y);
-		cz = abs((int32_t)ADC_Data_Good[2] - calib_data.z);
+		cx = abs((int32_t)ADC_Data_Good[0] - calib_data_RAM.x);
+		cy = abs((int32_t)ADC_Data_Good[1] - calib_data_RAM.y);
+		cz = abs((int32_t)ADC_Data_Good[2] - calib_data_RAM.z);
 
 		TLC5973_WriteChannels(&hTLC5973, cx,cy,cz);
 
@@ -443,7 +465,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.OversamplingMode = ENABLE;
   hadc1.Init.Oversampling.Ratio = 16;
   hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_5;
-  hadc1.Init.Oversampling.TriggeredMode = 0;
+  hadc1.Init.Oversampling.TriggeredMode = ADC_TRIGGEREDMODE_MULTI_TRIGGER;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -785,6 +807,46 @@ void ADXL_ST_Routine(void)
     }
 }
 
+HAL_StatusTypeDef DANGEROUS_Flash_Calib_Data()
+{
+	HAL_FLASH_Unlock();
+	FLASH_EraseInitTypeDef erasetype;
+	erasetype.NbPages = 1;
+	erasetype.Page = 15;
+	erasetype.TypeErase = FLASH_TYPEERASE_PAGES;
+	uint32_t pageerror = 0;
+	HAL_StatusTypeDef status;
+
+	status = HAL_FLASHEx_Erase(&erasetype, &pageerror);
+	if (status != HAL_OK) {
+		HAL_FLASH_Lock();
+		return status; // Erase failed
+	}
+
+
+
+	uint32_t address = &calib_data_FLASH.x;
+	uint64_t data_buffer = ((uint64_t)calib_data_RAM.x) | ((uint64_t)calib_data_RAM.y << 32);
+	status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
+	if (status != HAL_OK) {
+		HAL_FLASH_Lock();
+		return status; // Write failed
+	}
+
+	address = &calib_data_FLASH.z;
+	data_buffer = ((uint64_t)calib_data_RAM.z);
+	status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
+	if (status != HAL_OK) {
+		HAL_FLASH_Lock();
+		return status; // Write failed
+	}
+
+	HAL_FLASH_Lock();
+	return HAL_OK;
+
+
+}
+
 void ADXL_CALIB_Routine()
 {
 	TDR_draw_string("Please place the\ndevice on a flat\nsurface, with\nthe screen\npointing upwards", 0, 0, 1);
@@ -835,11 +897,15 @@ void ADXL_CALIB_Routine()
 	TDR_draw_string(buffer, 48, 48+32, 0);
 	HAL_Delay(100);
 	TDR_draw_string("saved to\ncalib_data...",0,48+48,0);
-	calib_data.x = sx;
-	calib_data.y = sy;
-	calib_data.z = sz;
+	calib_data_RAM.x = sx;
+	calib_data_RAM.y = sy;
+	calib_data_RAM.z = sz;
+	DANGEROUS_Flash_Calib_Data();
 	HAL_Delay(500);
+
 }
+
+
 
 void number_to_rgb(uint16_t input, uint8_t *r, uint8_t *g, uint8_t *b) {
     // 1. Scale 0-4095 to 0-1535 (6 segments of 256 steps)
