@@ -109,21 +109,35 @@ volatile char ADC_DATA_READY = 0;
 
 __attribute__((section(".flash_rw_area"))) Vector3 calib_data_FLASH;
 Vector3 calib_data_RAM = {.x=0,.y=0,.z=0};
+#define ema_shift 1
+uint32_t filtervalue[4] = {0,0,0,0};
+uint16_t ema(uint16_t new, uint8_t which)
+{
+	if(filtervalue[which] == 0)
+	{
+		 filtervalue[which] = (uint32_t)new << ema_shift;
+	}
+	filtervalue[which] = filtervalue[which] + new - (filtervalue[which] >> ema_shift);
+	return (uint16_t)(filtervalue[which] >> ema_shift);
+}
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //	char data[4];
 //	itoa(ADC_Data[0], data, 10);
 //	strcpy(usermessage, data);
-	if (ADC_DATA_REQUEST == 1)
+	if (ADC_DATA_REQUEST != 0)
 	{
 //		ADC_DATA_READY = 0;
 //		ADC_DATA_REQUEST = 0;
-		ADC_Data_Good[0] = 0;
-		ADC_Data_Good[1] = 0;
-		ADC_Data_Good[2] = 0;
-		ADC_Data_Good[3] = 0;
+		uint32_t ADC_Data_Temp[4];
+
+		ADC_Data_Temp[0] = 0;
+		ADC_Data_Temp[1] = 0;
+		ADC_Data_Temp[2] = 0;
+		ADC_Data_Temp[3] = 0;
 		for (int i = 0; i < ADC_BUFFER_SIZE; i++)
 		{
-			ADC_Data_Good[i%4] += ADC_Data[i];
+			ADC_Data_Temp[i%4] += (uint32_t)ADC_Data[i];
 		}
 
 //
@@ -133,29 +147,47 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //		ADC_Data_Good[3] = ADC_Data[3];
 
 
-		ADC_Data_Good[0] = ADC_Data_Good[0] / (ADC_BUFFER_SIZE / 4);
-		ADC_Data_Good[1] = ADC_Data_Good[1] / (ADC_BUFFER_SIZE / 4);
-		ADC_Data_Good[2] = ADC_Data_Good[2] / (ADC_BUFFER_SIZE / 4);
-		ADC_Data_Good[3] = ADC_Data_Good[3] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Temp[0] = ADC_Data_Temp[0] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Temp[1] = ADC_Data_Temp[1] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Temp[2] = ADC_Data_Temp[2] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Temp[3] = ADC_Data_Temp[3] / (ADC_BUFFER_SIZE / 4);
 
-		uint16_t temp = ADC_Data_Good[0];
-		ADC_Data_Good[0] = ADC_Data_Good[2];
-		ADC_Data_Good[2] = temp;
+		uint32_t temp = ADC_Data_Temp[0];
+		ADC_Data_Temp[0] = ADC_Data_Temp[2];
+		ADC_Data_Temp[2] = temp;
+
+		//ema over all data
+		for (int i = 0; i < 4; i++)
+		{
+			if (ADC_DATA_REQUEST == 2)
+			{
+				ADC_Data_Good[i] = ema(ADC_Data_Temp[i], i);
+			}
+			else
+			{
+				ADC_Data_Good[i] = ADC_Data_Temp[i];
+			}
+			//ADC_Data_Good[i] = ADC_Data_Temp[i];
+		}
 
 		ADC_DATA_READY = 1;
-
-
 		//data averaging
 	}
 }
 
-static inline int max(int a, int b) {
+static int max(int a, int b) {
     return (a > b) ? a : b;
 }
 
 void EMS_ADC_READ() //triggers read into ADC_Data_Good, waits for return
 {
 	ADC_DATA_REQUEST = 1;
+	while(ADC_DATA_READY == 0);
+}
+
+void EMS_ADC_READ_SMOOTH() //triggers read into ADC_Data_Good, waits for return
+{
+	ADC_DATA_REQUEST = 2;
 	while(ADC_DATA_READY == 0);
 }
 /* USER CODE END 0 */
@@ -256,7 +288,7 @@ int main(void)
 #endif
 	//ATTENTION ALL CONTRIBUTORS: THE WHILE LOOP STARTS HERE
 	while (steps < maxsteps) {
-		EMS_ADC_READ();
+		EMS_ADC_READ_SMOOTH();
 		TDR_draw_number_small(ADC_Data_Good[0], 0, 0);
 		TDR_draw_number_small(ADC_Data_Good[1], 0, 16);
 		TDR_draw_number_small(ADC_Data_Good[2], 0, 32);
@@ -310,7 +342,7 @@ int main(void)
 		cy = abs((int32_t)ADC_Data_Good[1] - calib_data_RAM.y);
 		cz = abs((int32_t)ADC_Data_Good[2] - calib_data_RAM.z);
 
-		TLC5973_WriteChannels(&hTLC5973, max(cx-200,0),max(cy-200,0),(cz-200,0));
+		TLC5973_WriteChannels(&hTLC5973, max(cx-200,0),max(cy-200,0),max(cz-200,0));
 
 		TDR_draw_background_circle(steps, maxsteps);
 
@@ -788,8 +820,8 @@ void ADXL_ST_Routine(void)
 
         // Check limits
         if ((dx > 50 && dx < 800) &&
-            (dy > 50 && dy < 800) &&
-            (dz > 50 && dz < 800))
+            (dy < -200 && dy > -500) &&
+            (dz < -400 && dz > -900))
         {
             //TDR_clear_screen();
             TDR_draw_string("SELF TEST PASS", 0, 0, 1);
@@ -910,7 +942,7 @@ void ADXL_CALIB_Routine()
 	calib_data_RAM.z = sz;
 	DANGEROUS_Flash_Calib_Data();
 	HAL_Delay(500);
-
+	return;
 }
 
 

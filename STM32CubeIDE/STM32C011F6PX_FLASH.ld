@@ -177,7 +177,7 @@ SECTIONS
     . = ALIGN(8);
   } >RAM
   
-  .flash_rw_area :
+  .flash_rw_area (NOLOAD) :
   {
     . = ALIGN(4);
     *(.flash_rw_area)
