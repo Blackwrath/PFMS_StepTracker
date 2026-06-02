@@ -26,6 +26,7 @@
 #include "ssd1351.h"
 #include "TiledDisplayRenderer.h"
 #include "tlc5973.h"
+#include "StepIdentifier.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -121,10 +122,12 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //		ADC_Data_Good[2] = 0;
 //		ADC_Data_Good[3] = 0;
 
-		for (int i = 0; i < 4; i++)
-		{
-			ADC_Data_Good[i] = ADC_Data[i];
-		}
+
+		ADC_Data_Good[2] = ADC_Data[0];
+		ADC_Data_Good[1] = ADC_Data[1];
+		ADC_Data_Good[0] = ADC_Data[2]; //fix here: reorder data from ZYXB to XYZB
+		ADC_Data_Good[3] = ADC_Data[3];
+
 
 //		ADC_Data_Good[0] = ADC_Data_Good[0] / (ADC_BUFFER_SIZE / 4);
 //		ADC_Data_Good[1] = ADC_Data_Good[1] / (ADC_BUFFER_SIZE / 4);
@@ -417,9 +420,9 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
-  hadc1.Init.OversamplingMode = DISABLE;
-  hadc1.Init.Oversampling.Ratio = 1;
-  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_NONE;
+  hadc1.Init.OversamplingMode = ENABLE;
+  hadc1.Init.Oversampling.Ratio = 16;
+  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_5;
   hadc1.Init.Oversampling.TriggeredMode = 0;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -430,7 +433,7 @@ static void MX_ADC1_Init(void)
   /** Configure Regular Channel
   */
   sConfig.Channel = ADC_CHANNEL_4;
-  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -439,6 +442,7 @@ static void MX_ADC1_Init(void)
   /** Configure Regular Channel
   */
   sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -447,6 +451,7 @@ static void MX_ADC1_Init(void)
   /** Configure Regular Channel
   */
   sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -455,6 +460,7 @@ static void MX_ADC1_Init(void)
   /** Configure Regular Channel
   */
   sConfig.Channel = ADC_CHANNEL_7;
+  sConfig.Rank = ADC_REGULAR_RANK_4;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();

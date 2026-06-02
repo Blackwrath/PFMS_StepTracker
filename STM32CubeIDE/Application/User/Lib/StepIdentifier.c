@@ -4,11 +4,10 @@
  *  Created on: May 4, 2026
  *      Author: willa
  */
-struct Vector3 { // Imma need to do some vector maths, so I'm making my own collection of functions for working with Vector3
-	int x;
-	int y;
-	int z;
-}
+#include <stdint.h>
+#include <stdbool.h>
+#include "StepIdentifier.h"
+
 
 Vector3 vecSub(Vector3 v1, Vector3 v2){
 	Vector3 out;
