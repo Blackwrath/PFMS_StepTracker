@@ -124,7 +124,7 @@ Vector3 calib_data_RAM_negative = {.x=0,.y=0,.z=0};
 uint32_t filtervalue[5] = {0,0,0,0,0};
 uint16_t ema(uint16_t new, uint8_t which)
 {
-	uint8_t johnvalue = 1;
+	uint8_t johnvalue = 0;
 	if (which == 5)
 	{
 		johnvalue = 3;
@@ -1033,23 +1033,18 @@ void ADXL_ST_Routine(void)
         EMS_ADC_READ();
         HAL_Delay(20);
         //Read_Accelerometer(&x_normal, &y_normal, &z_normal);
-
         x_normal = ADC_Data_Good[0];
         y_normal = ADC_Data_Good[1];
         z_normal = ADC_Data_Good[2];
-
-
         // Enable self-test
         ST_Enable();
         HAL_Delay(20);
         EMS_ADC_READ();
         HAL_Delay(20);
         //Read_Accelerometer(&x_st, &y_st, &z_st);
-
         x_st = ADC_Data_Good[0];
         y_st = ADC_Data_Good[1];
         z_st = ADC_Data_Good[2];
-
         // Calculate difference
         dx = x_st - x_normal;
         dy = y_st - y_normal;
@@ -1082,7 +1077,7 @@ void ADXL_ST_Routine(void)
             //TDR_clear_screen();
             TDR_draw_string("SELF TEST FAIL", 0, 0, 1);
         }
-        while(HAL_GPIO_ReadPin(GPIO_BUTTON2_GPIO_Port, GPIO_BUTTON2_Pin) == GPIO_PIN_RESET){}
+        while(HAL_GPIO_ReadPin(GPIO_BUTTON2_GPIO_Port, GPIO_BUTTON2_Pin) == GPIO_PIN_RESET){} //pause if tolding button 2
 //        if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_SET)
 //        {
 //        	retry++;
