@@ -9,10 +9,10 @@
 #define APPLICATION_USER_LIB_STEPIDENTIFIER_H_
 #include <stdbool.h>
 
-typedef struct { // Imma need to do some vector maths, so I'm making my own collection of functions for working with Vector3
-	int x;
-	int y;
-	int z;
+typedef __attribute__((aligned(16))) struct { // Imma need to do some vector maths, so I'm making my own collection of functions for working with Vector3
+	int32_t x;
+	int32_t y;
+	int32_t z;
 } Vector3;
 
 Vector3 vecSub(Vector3 v1, Vector3 v2);

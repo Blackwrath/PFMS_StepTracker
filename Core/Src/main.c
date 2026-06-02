@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "ssd1351.h"
 #include "TiledDisplayRenderer.h"
 #include "tlc5973.h"
@@ -98,6 +99,9 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
 }
 
 // Called when buffer is completely filled
+
+bool Step = false;
+
 # define ADC_BUFFER_SIZE 4 * 16
 
 volatile uint16_t ADC_Data[ADC_BUFFER_SIZE];
@@ -108,7 +112,11 @@ volatile char ADC_DATA_REQUEST = 0;
 volatile char ADC_DATA_READY = 0;
 
 __attribute__((section(".flash_rw_area"))) Vector3 calib_data_FLASH;
+__attribute__((section(".flash_rw_area"))) Vector3 calib_data_FLASH_positive;
+__attribute__((section(".flash_rw_area"))) Vector3 calib_data_FLASH_negative;
 Vector3 calib_data_RAM = {.x=0,.y=0,.z=0};
+Vector3 calib_data_RAM_positive = {.x=0,.y=0,.z=0};
+Vector3 calib_data_RAM_negative = {.x=0,.y=0,.z=0};
 #define ema_shift 1
 uint32_t filtervalue[4] = {0,0,0,0};
 uint16_t ema(uint16_t new, uint8_t which)
@@ -271,10 +279,40 @@ int main(void)
 	TDR_draw_string(usermessage, 0, 48, 0);
 	HAL_Delay(50);
 
+
+	sprintf(usermessage, "%u", calib_data_FLASH_positive.x);
+	TDR_draw_string(usermessage, 8*5, 16, 0);
+	HAL_Delay(50);
+	sprintf(usermessage, "%u", calib_data_FLASH_positive.y);
+	TDR_draw_string(usermessage, 8*5, 32, 0);
+	HAL_Delay(50);
+	sprintf(usermessage, "%u", calib_data_FLASH_positive.z);
+	TDR_draw_string(usermessage, 8*5, 48, 0);
+	HAL_Delay(50);
+
+
+	sprintf(usermessage, "%u", calib_data_FLASH_negative.x);
+	TDR_draw_string(usermessage, 8 * 10, 16, 0);
+	HAL_Delay(50);
+	sprintf(usermessage, "%u", calib_data_FLASH_negative.y);
+	TDR_draw_string(usermessage, 8 * 10, 32, 0);
+	HAL_Delay(50);
+	sprintf(usermessage, "%u", calib_data_FLASH_negative.z);
+	TDR_draw_string(usermessage, 8 * 10, 48, 0);
+	HAL_Delay(50);
+	TDR_draw_string("FLAT +    -", 0, 64, 0);
+	HAL_Delay(500);
+
 	calib_data_RAM.x = calib_data_FLASH.x;
 	calib_data_RAM.y = calib_data_FLASH.y;
 	calib_data_RAM.z = calib_data_FLASH.z;
-	TDR_draw_string("Loaded!", 0, 64, 0);
+	calib_data_RAM_positive.x = calib_data_FLASH_positive.x;
+	calib_data_RAM_positive.y = calib_data_FLASH_positive.y;
+	calib_data_RAM_positive.z = calib_data_FLASH_positive.z;
+	calib_data_RAM_negative.x = calib_data_FLASH_negative.x;
+	calib_data_RAM_negative.y = calib_data_FLASH_negative.y;
+	calib_data_RAM_negative.z = calib_data_FLASH_negative.z;
+	TDR_draw_string("Loaded!", 0, 80, 0);
 
 	HAL_Delay(200);
 	TDR_clear_screen();
@@ -380,7 +418,10 @@ int main(void)
 //		  	  TDR_draw_number_sprite(hundreds, 48, 44);
 //		  	  TDR_draw_number_sprite(thous, 32, 44);
 //	  }
-		steps++;
+		//check for step
+		//steps++;
+		Vector3 current = {.x = ADC_Data_Good[0], .y = ADC_Data_Good[1], .z = ADC_Data_Good[2]};
+		TrackStep(current, calib_data_RAM, &Step, &steps);
 
 		if (now - start > 1000) //DEBUG: FRAMERATE
 				{
@@ -847,8 +888,19 @@ void ADXL_ST_Routine(void)
     }
 }
 
+HAL_StatusTypeDef DANGEROUS_flashtwo(int32_t first, int32_t second, uint32_t address)
+{
+	uint64_t data_buffer = ((uint64_t)first) | ((uint64_t)second << 32);
+	HAL_StatusTypeDef status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
+	if (status != HAL_OK) {
+		HAL_FLASH_Lock();
+		return status; // Write failed
+	}
+}
+
 HAL_StatusTypeDef DANGEROUS_Flash_Calib_Data()
 {
+	//pos xyz neg xyz
 	HAL_FLASH_Unlock();
 	FLASH_EraseInitTypeDef erasetype;
 	erasetype.NbPages = 1;
@@ -863,85 +915,168 @@ HAL_StatusTypeDef DANGEROUS_Flash_Calib_Data()
 		return status; // Erase failed
 	}
 
+	//uint32_t address = &calib_data_FLASH.x;
+	DANGEROUS_flashtwo(calib_data_RAM.x, calib_data_RAM.y, &calib_data_FLASH.x);
+	DANGEROUS_flashtwo(calib_data_RAM.z, 0, &calib_data_FLASH.z);
+
+	DANGEROUS_flashtwo(calib_data_RAM_positive.x, calib_data_RAM_positive.y, &calib_data_FLASH_positive.x);
+	DANGEROUS_flashtwo(calib_data_RAM_positive.z, 0, &calib_data_FLASH_positive.z);
+
+	DANGEROUS_flashtwo(calib_data_RAM_negative.x, calib_data_RAM_negative.y, &calib_data_FLASH_negative.x);
+	DANGEROUS_flashtwo(calib_data_RAM_negative.z, 0, &calib_data_FLASH_negative.z);
 
 
-	uint32_t address = &calib_data_FLASH.x;
-	uint64_t data_buffer = ((uint64_t)calib_data_RAM.x) | ((uint64_t)calib_data_RAM.y << 32);
-	status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
-	if (status != HAL_OK) {
-		HAL_FLASH_Lock();
-		return status; // Write failed
-	}
-
-	address = &calib_data_FLASH.z;
-	data_buffer = ((uint64_t)calib_data_RAM.z);
-	status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
-	if (status != HAL_OK) {
-		HAL_FLASH_Lock();
-		return status; // Write failed
-	}
+//	uint32_t address = &calib_data_FLASH_positive.x; //pos xy
+//	uint64_t data_buffer = ((uint64_t)calib_data_RAM_positive.x) | ((uint64_t)calib_data_RAM_positive.y << 32);
+//	status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
+//	if (status != HAL_OK) {
+//		HAL_FLASH_Lock();
+//		return status; // Write failed
+//	}
+//
+//	address = &calib_data_FLASH_positive.z; //pos z neg x
+//	data_buffer = ((uint64_t)calib_data_RAM_positive.z) | ((uint64_t)calib_data_RAM_negative.x << 32);
+//	status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
+//	if (status != HAL_OK) {
+//		HAL_FLASH_Lock();
+//		return status; // Write failed
+//	}
+//
+//	address = &calib_data_FLASH_negative.y; //neg yz
+//	data_buffer = ((uint64_t)calib_data_RAM_negative.y) | ((uint64_t)calib_data_RAM_negative.z << 32);
+//	status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, data_buffer);
+//	if (status != HAL_OK) {
+//		HAL_FLASH_Lock();
+//		return status; // Write failed
+//	}
 
 	HAL_FLASH_Lock();
 	return HAL_OK;
+}
 
+void ADXL_CALIB_Routine_once(uint32_t values[])
+{
+
+	//start sampling data
+	TLC5973_WriteChannels(&hTLC5973, 200, 0, 0);
+	values[0] = 0;
+	values[1] = 0;
+	values[2] = 0;
+	char buffer[32];
+	TDR_clear_screen();
+	uint32_t samplecount = 1;
+	for (samplecount = 1; samplecount <= 32; samplecount++)
+	{
+		EMS_ADC_READ();
+
+		values[0] += ADC_Data_Good[0];
+		values[1] += ADC_Data_Good[1];
+		values[2] += ADC_Data_Good[2];
+
+		sprintf(buffer, "Samples: %u", samplecount);
+		TDR_draw_string(buffer, 0, 48-16,0);
+		sprintf(buffer, "X: %u", values[0]);
+		TDR_draw_string(buffer, 48, 48, 0);
+		sprintf(buffer, "Y: %u", values[1]);
+		TDR_draw_string(buffer, 48, 48+16, 0);
+		sprintf(buffer, "Z: %u", values[2]);
+		TDR_draw_string(buffer, 48, 48+32, 0);
+	}
+	TDR_clear_screen();
+	values[0] /= samplecount;
+	values[1] /= samplecount;
+	values[2] /= samplecount;
+	sprintf(buffer, "Average:");
+	TDR_draw_string(buffer, 0, 48-16,0);
+	sprintf(buffer, "X: %u", values[0]);
+	TDR_draw_string(buffer, 48, 48, 0);
+	sprintf(buffer, "Y: %u", values[1]);
+	TDR_draw_string(buffer, 48, 48+16, 0);
+	sprintf(buffer, "Z: %u", values[2]);
+	TDR_draw_string(buffer, 48, 48+32, 0);
+	//TDR_draw_string("saved Z Positive...",0,48+48,0);
+	HAL_Delay(100);
+	TDR_clear_screen();
+	TLC5973_WriteChannels(&hTLC5973, 0, 0, 200);
+
+	//		calib_data_RAM.x = sx;
+	//		calib_data_RAM.y = sy;
+	//		calib_data_RAM.z = sz;
 
 }
 
 void ADXL_CALIB_Routine()
 {
+	//POSITIVE Z
+	TLC5973_WriteChannels(&hTLC5973, 0, 0, 200);
+	uint32_t values[3];
 	TDR_draw_string("Please place the\ndevice on a flat\nsurface, with\nthe screen\npointing upwards", 0, 0, 1);
 	for(int8_t ticker = 5; ticker > 0; ticker--)
 	{
 		TDR_draw_number_sprite(ticker, 111, 111);
 		HAL_Delay(1000);
 	}
-	//start sampling data
-	uint32_t sx = 0;
-	uint32_t sy = 0;
-	uint32_t sz = 0;
-	char buffer[32];
-	TDR_clear_screen();
-	uint32_t samplecount = 1;
-	for (samplecount = 1; samplecount <= 1024; samplecount++)
-	{
-		EMS_ADC_READ();
+	ADXL_CALIB_Routine_once(values);
+	calib_data_RAM.x = values[0];
+	calib_data_RAM.y = values[1];
+	calib_data_RAM.z = values[2];
+	calib_data_RAM_positive.z = values[2];
 
-		sx += ADC_Data_Good[0];
-		sy += ADC_Data_Good[1];
-		sz += ADC_Data_Good[2];
-		if (samplecount%16 == 0)
+	//TILT LEFT
+	TDR_draw_string("Please place the\ndevice on\nits LEFT", 0, 0, 1);
+	TDR_draw_string("L\nE\nF\nT", 0, 64, 0);
+		for(int8_t ticker = 3; ticker > 0; ticker--)
 		{
-
-			sprintf(buffer, "Samples: %u", samplecount);
-			TDR_draw_string(buffer, 0, 48-16,0);
-			sprintf(buffer, "X: %u", sx);
-			TDR_draw_string(buffer, 48, 48, 0);
-			sprintf(buffer, "Y: %u", sy);
-			TDR_draw_string(buffer, 48, 48+16, 0);
-			sprintf(buffer, "Z: %u", sz);
-			TDR_draw_string(buffer, 48, 48+32, 0);
+			TDR_draw_number_sprite(ticker, 111, 111);
+			HAL_Delay(1000);
 		}
+	ADXL_CALIB_Routine_once(values);
+	calib_data_RAM_negative.x = values[0];
+
+	TDR_draw_string("Please place the\ndevice on\nits RIGHT", 0, 0, 1);
+	TDR_draw_string("R\nI\nG\nH\nT", 111, 48, 0);
+	for(int8_t ticker = 3; ticker > 0; ticker--)
+	{
+		TDR_draw_number_sprite(ticker, 111, 111);
+		HAL_Delay(1000);
 	}
-	TDR_clear_screen();
-	HAL_Delay(500);
-	sx /= samplecount;
-	sy /= samplecount;
-	sz /= samplecount;
-	sprintf(buffer, "Average:");
-	TDR_draw_string(buffer, 0, 48-16,0);
-	sprintf(buffer, "X: %u", sx);
-	TDR_draw_string(buffer, 48, 48, 0);
-	sprintf(buffer, "Y: %u", sy);
-	TDR_draw_string(buffer, 48, 48+16, 0);
-	sprintf(buffer, "Z: %u", sz);
-	TDR_draw_string(buffer, 48, 48+32, 0);
-	HAL_Delay(100);
-	TDR_draw_string("saved to\ncalib_data...",0,48+48,0);
-	calib_data_RAM.x = sx;
-	calib_data_RAM.y = sy;
-	calib_data_RAM.z = sz;
+	ADXL_CALIB_Routine_once(values);
+	calib_data_RAM_positive.x = values[0];
+
+	TDR_draw_string("Please place the\ndevice on\nits TOP", 0, 32, 1);
+	TDR_draw_string("------TOP------", 0, 0, 0);
+	for(int8_t ticker = 3; ticker > 0; ticker--)
+	{
+		TDR_draw_number_sprite(ticker, 111, 111);
+		HAL_Delay(1000);
+	}
+	ADXL_CALIB_Routine_once(values);
+	calib_data_RAM_positive.y = values[1];
+
+	TDR_draw_string("Please place the\ndevice on\nits BOTTOM", 0, 0, 1);
+	TDR_draw_string("-----BOTTOM-----", 0, 127 - 16, 0);
+	for(int8_t ticker = 3; ticker > 0; ticker--)
+	{
+		TDR_draw_number_sprite(ticker, 111, 111);
+		HAL_Delay(1000);
+	}
+	ADXL_CALIB_Routine_once(values);
+	calib_data_RAM_negative.y = values[1];
+
+	TDR_draw_string("Please place the\ndevice SCREEN\nDOWN", 0, 0, 1);
+	for(int8_t ticker = 5; ticker > 0; ticker--)
+	{
+		TDR_draw_number_sprite(ticker, 111, 111);
+		HAL_Delay(1000);
+	}
+	ADXL_CALIB_Routine_once(values);
+	calib_data_RAM_negative.z = values[2];
+
+
+
 	DANGEROUS_Flash_Calib_Data();
-	HAL_Delay(500);
+	TDR_draw_string("Calibration\nSaved!",0,0,0);
+	HAL_Delay(2000);
 	return;
 }
 
