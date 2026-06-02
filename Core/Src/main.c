@@ -301,7 +301,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	uint32_t steps = 0;
-	uint32_t maxsteps = 1000;
+	uint32_t maxsteps = 200;
 	TDR_clear_screen();
 	int ones = (steps) % 10;
 	int tens = (steps / 10) % 10;
@@ -382,7 +382,7 @@ int main(void)
 #endif
 	uint32_t stepsOld = 0;
 	//ATTENTION ALL CONTRIBUTORS: THE WHILE LOOP STARTS HERE
-	while (steps < maxsteps) {
+	while (true) {
 		EMS_ADC_READ_SMOOTH();
 //		TDR_draw_number_small(ADC_Data_Good[0], 0, 0);
 //		TDR_draw_number_small(ADC_Data_Good[1], 0, 16);
