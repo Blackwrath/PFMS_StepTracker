@@ -84,6 +84,9 @@ void ADXL_ST_Routine(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
 	if (hspi->Instance == SPI1) {
 		TDR_DMA_READY = 1;
@@ -118,16 +121,34 @@ Vector3 calib_data_RAM = {.x=0,.y=0,.z=0};
 Vector3 calib_data_RAM_positive = {.x=0,.y=0,.z=0};
 Vector3 calib_data_RAM_negative = {.x=0,.y=0,.z=0};
 #define ema_shift 1
-uint32_t filtervalue[4] = {0,0,0,0};
+uint32_t filtervalue[5] = {0,0,0,0,0};
 uint16_t ema(uint16_t new, uint8_t which)
 {
+	uint8_t johnvalue = 1;
+	if (which == 5)
+	{
+		johnvalue = 3;
+	}
 	if(filtervalue[which] == 0)
 	{
-		 filtervalue[which] = (uint32_t)new << ema_shift;
+		 filtervalue[which] = (uint32_t)new << (ema_shift * johnvalue);
 	}
-	filtervalue[which] = filtervalue[which] + new - (filtervalue[which] >> ema_shift);
-	return (uint16_t)(filtervalue[which] >> ema_shift);
+	filtervalue[which] = filtervalue[which] + new - (filtervalue[which] >> (ema_shift * johnvalue));
+	return (uint16_t)(filtervalue[which] >> (ema_shift * johnvalue));
 }
+uint16_t ema4(uint16_t new, uint8_t which)
+{
+	uint8_t johnvalue = 4;
+	if(filtervalue[which] == 0)
+	{
+		 filtervalue[which] = (uint32_t)new << (ema_shift * johnvalue);
+	}
+	filtervalue[which] = filtervalue[which] + new - (filtervalue[which] >> (ema_shift * johnvalue));
+	return (uint16_t)(filtervalue[which] >> (ema_shift * johnvalue));
+}
+uint32_t currentStepTime;
+uint32_t oldStepTime;
+uint32_t stepsPerMinute;
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //	char data[4];
@@ -171,6 +192,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 			{
 				ADC_Data_Good[i] = ema(ADC_Data_Temp[i], i);
 			}
+			if (ADC_DATA_REQUEST == 3)
+			{
+				ADC_Data_Good[i] = ema4(ADC_Data_Temp[i], i);
+			}
 			else
 			{
 				ADC_Data_Good[i] = ADC_Data_Temp[i];
@@ -187,6 +212,10 @@ static int max(int a, int b) {
     return (a > b) ? a : b;
 }
 
+static int min(int a, int b) {
+    return (a < b) ? a : b;
+}
+
 void EMS_ADC_READ() //triggers read into ADC_Data_Good, waits for return
 {
 	ADC_DATA_REQUEST = 1;
@@ -198,6 +227,32 @@ void EMS_ADC_READ_SMOOTH() //triggers read into ADC_Data_Good, waits for return
 	ADC_DATA_REQUEST = 2;
 	while(ADC_DATA_READY == 0);
 }
+
+void EMS_ADC_READ_SMOOTHER() //triggers read into ADC_Data_Good, waits for return
+{
+	ADC_DATA_REQUEST = 3;
+	while(ADC_DATA_READY == 0);
+}
+
+int32_t resetTimerLength = 2999;
+int32_t resetTimerStartTime;
+bool resetTimerRunning = false;
+bool resetTimerLockout = false;
+
+int32_t calibTimerStartTime;
+bool calibTimerRunning = false;
+bool calibTimerLockout = false;
+
+void createBatteryString()
+{
+	uint16_t batterylevel = ADC_Data_Good[3]; //between 0 and 4095
+	batterylevel = (batterylevel - 0) * (4620) / (4095 - 0);
+	sprintf(usermessage, "%u.%u%u%uV", (batterylevel/1000)%10, (batterylevel/100)%10,(batterylevel/10)%10,batterylevel%10);
+	//sprintf(usermessage,"%u",batterylevel);
+}
+
+bool battTick = false;
+
 /* USER CODE END 0 */
 
 /**
@@ -254,6 +309,7 @@ int main(void)
 	int thous = (steps / 1000) % 10;
 	uint16_t framecounter = 0;
 	uint32_t start = HAL_GetTick();
+	uint32_t start2 = HAL_GetTick();
 	uint32_t now = HAL_GetTick();
 	uint32_t ms = 0;
 
@@ -269,35 +325,35 @@ int main(void)
 
 	TDR_draw_string("CALIB DATA FLASH", 0, 0, 0);
 	HAL_Delay(300);
-	sprintf(usermessage, "%u", calib_data_FLASH.x);
+	sprintf(usermessage, "%i", calib_data_FLASH.x);
 	TDR_draw_string(usermessage, 0, 16, 0);
 	HAL_Delay(50);
-	sprintf(usermessage, "%u", calib_data_FLASH.y);
+	sprintf(usermessage, "%i", calib_data_FLASH.y);
 	TDR_draw_string(usermessage, 0, 32, 0);
 	HAL_Delay(50);
-	sprintf(usermessage, "%u", calib_data_FLASH.z);
+	sprintf(usermessage, "%i", calib_data_FLASH.z);
 	TDR_draw_string(usermessage, 0, 48, 0);
 	HAL_Delay(50);
 
 
-	sprintf(usermessage, "%u", calib_data_FLASH_positive.x);
+	sprintf(usermessage, "%i", calib_data_FLASH_positive.x);
 	TDR_draw_string(usermessage, 8*5, 16, 0);
 	HAL_Delay(50);
-	sprintf(usermessage, "%u", calib_data_FLASH_positive.y);
+	sprintf(usermessage, "%i", calib_data_FLASH_positive.y);
 	TDR_draw_string(usermessage, 8*5, 32, 0);
 	HAL_Delay(50);
-	sprintf(usermessage, "%u", calib_data_FLASH_positive.z);
+	sprintf(usermessage, "%i", calib_data_FLASH_positive.z);
 	TDR_draw_string(usermessage, 8*5, 48, 0);
 	HAL_Delay(50);
 
 
-	sprintf(usermessage, "%u", calib_data_FLASH_negative.x);
+	sprintf(usermessage, "%i", calib_data_FLASH_negative.x);
 	TDR_draw_string(usermessage, 8 * 10, 16, 0);
 	HAL_Delay(50);
-	sprintf(usermessage, "%u", calib_data_FLASH_negative.y);
+	sprintf(usermessage, "%i", calib_data_FLASH_negative.y);
 	TDR_draw_string(usermessage, 8 * 10, 32, 0);
 	HAL_Delay(50);
-	sprintf(usermessage, "%u", calib_data_FLASH_negative.z);
+	sprintf(usermessage, "%i", calib_data_FLASH_negative.z);
 	TDR_draw_string(usermessage, 8 * 10, 48, 0);
 	HAL_Delay(50);
 	TDR_draw_string("FLAT +    -", 0, 64, 0);
@@ -324,12 +380,14 @@ int main(void)
 #ifdef DEBUG
 	int32_t debug_ticker = 0;
 #endif
+	uint32_t stepsOld = 0;
 	//ATTENTION ALL CONTRIBUTORS: THE WHILE LOOP STARTS HERE
 	while (steps < maxsteps) {
 		EMS_ADC_READ_SMOOTH();
-		TDR_draw_number_small(ADC_Data_Good[0], 0, 0);
-		TDR_draw_number_small(ADC_Data_Good[1], 0, 16);
-		TDR_draw_number_small(ADC_Data_Good[2], 0, 32);
+//		TDR_draw_number_small(ADC_Data_Good[0], 0, 0);
+//		TDR_draw_number_small(ADC_Data_Good[1], 0, 16);
+//		TDR_draw_number_small(ADC_Data_Good[2], 0, 32);
+//		TDR_draw_number_small(ADC_Data_Good[3], 0, 48);
 		/*************************** Self-Test Sequence**********************************/
 		if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
 		//if (1)
@@ -337,7 +395,7 @@ int main(void)
 			TDR_clear_screen(); // Clear before resuming
 		    ADXL_ST_Routine();
 
-		    HAL_Delay(1000);   // Let user see result
+		    HAL_Delay(100);   // Let user see result
 		    TDR_clear_screen(); // Clear before resuming
 		}
 		/*********************************************************************************/
@@ -345,13 +403,83 @@ int main(void)
 		/***************************Calibration Sequence**********************************/
 		if (HAL_GPIO_ReadPin(GPIO_BUTTON2_GPIO_Port, GPIO_BUTTON2_Pin) == GPIO_PIN_RESET)
 		{
-			TDR_clear_screen(); // Clear before resuming
-			ADXL_CALIB_Routine();
 
-			HAL_Delay(1000);   // Let user see result
-			TDR_clear_screen(); // Clear before resuming
+			if (!calibTimerLockout)
+			{
+				if (calibTimerRunning == false)
+				{
+					calibTimerStartTime = HAL_GetTick();
+					TDR_draw_string("Starting\ncalib in:   ", 0, (127 - 16 *2), 0);
+					calibTimerRunning = true;
+				}
+				if (calibTimerRunning)
+				{
+					int32_t calibTimeRemaining = (int32_t)HAL_GetTick() - calibTimerStartTime;
+					TDR_draw_number_sprite((((resetTimerLength - calibTimeRemaining))/1000) + 1, (10 * 8), (127 - 16*2));
+					if (calibTimeRemaining > resetTimerLength) {
+						TDR_clear_screen(); // Clear before resuming
+						ADXL_CALIB_Routine();
+						HAL_Delay(1000);   // Let user see result
+						TDR_clear_screen(); // Clear before resuming
+						calibTimerLockout = true;
+					}
+				}
+			}
+		}
+		else
+		{
+			if (calibTimerRunning)
+			{
+				TDR_draw_string("            \n              ", 0, (127-16*2),0);
+				calibTimerRunning = false;
+				calibTimerLockout = false;
+			}
 		}
 		/*********************************************************************************/
+
+		/***************************Reset steps Sequence**********************************/
+		if (HAL_GPIO_ReadPin(GPIO_BUTTON3_GPIO_Port, GPIO_BUTTON3_Pin) == GPIO_PIN_RESET)
+		{
+			if (!resetTimerLockout)
+			{
+				if (resetTimerRunning == false)
+				{
+					resetTimerStartTime = HAL_GetTick();
+					TDR_draw_string("Resetting\ncounter in:", 0, (127 - 16 *2), 0);
+					resetTimerRunning = true;
+				}
+				if (resetTimerRunning)
+				{
+					int32_t resetTimeRemaining = (int32_t)HAL_GetTick() - resetTimerStartTime;
+					TDR_draw_number_sprite((((resetTimerLength - resetTimeRemaining))/1000) + 1, (10 * 8), (127 - 16*2));
+					if (resetTimeRemaining > resetTimerLength) {
+						steps = 0;
+						TDR_draw_string("Reset!      \n              ", 0, (127-16*2),0);
+						resetTimerLockout = true;
+					}
+				}
+			}
+		}
+		else
+		{
+			if (resetTimerRunning)
+			{
+				TDR_draw_string("            \n              ", 0, (127-16*2),0);
+				resetTimerRunning = false;
+				resetTimerLockout = false;
+			}
+
+		}
+		/*********************************************************************************/
+
+		/*************************** Self-Test Sequence**********************************/
+				if (HAL_GPIO_ReadPin(GPIO_BUTTON4_GPIO_Port, GPIO_BUTTON4_Pin) == GPIO_PIN_RESET)
+				//if (1)
+				{
+					superbPongLoop();
+				    TDR_clear_screen(); // Clear before resuming
+				}
+				/*********************************************************************************/
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -380,7 +508,7 @@ int main(void)
 		cy = abs((int32_t)ADC_Data_Good[1] - calib_data_RAM.y);
 		cz = abs((int32_t)ADC_Data_Good[2] - calib_data_RAM.z);
 
-		TLC5973_WriteChannels(&hTLC5973, max(cx-200,0),max(cy-200,0),max(cz-200,0));
+		//TLC5973_WriteChannels(&hTLC5973, max(cx-200,0),max(cy-200,0),max(cz-200,0));
 
 		TDR_draw_background_circle(steps, maxsteps);
 
@@ -398,12 +526,13 @@ int main(void)
 			}
 		}
 
-		//TDR_draw_string(usermessage, 0, 0, 0);
 
-		framecounter++;
+
+		//TDR_draw_string(usermessage, 0, 0, 0);
 		//HAL_Delay(20);
 
 		now = HAL_GetTick(); //MILLISECOND TIMING CODE
+
 //	  ms = now - start;
 //	  start = now;
 //	  //timing stats
@@ -422,18 +551,95 @@ int main(void)
 		//steps++;
 		Vector3 current = {.x = ADC_Data_Good[0], .y = ADC_Data_Good[1], .z = ADC_Data_Good[2]};
 		TrackStep(current, calib_data_RAM, &Step, &steps);
-
-		if (now - start > 1000) //DEBUG: FRAMERATE
-				{
-			//display framecounter
-			ones = (framecounter) % 10;
-			tens = (framecounter / 10) % 10;
-			hundreds = (framecounter / 100) % 10;
-			thous = (framecounter / 1000) % 10;
+		if (stepsOld != steps)
+		{
+			uint8_t r,g,b = 0;
+			oldStepTime = currentStepTime;
+			currentStepTime = HAL_GetTick(); //time between steps
+			uint32_t timeBetweenSteps = currentStepTime - oldStepTime;
+			framecounter++;
+			stepsOld = steps;
+			uint16_t tempfiltered = ema(timeBetweenSteps, 5);
+			stepsPerMinute = 60000 / tempfiltered;
+			number_to_rgb(stepsPerMinute * 30, &r, &g, &b);
+			//if (ADC_Data_Good[3] > 3000 || ADC_Data_Good[3] < 30)
+			//{
+				TLC5973_WriteChannels(&hTLC5973, r, b, g);
+			//}
+			ones = (stepsPerMinute) % 10;
+			tens = (stepsPerMinute / 10) % 10;
+			hundreds = (stepsPerMinute / 100) % 10;
+			thous = (stepsPerMinute / 1000) % 10;
 			TDR_draw_number_sprite(ones, 80, 44);
 			TDR_draw_number_sprite(tens, 64, 44);
 			TDR_draw_number_sprite(hundreds, 48, 44);
 			TDR_draw_number_sprite(thous, 32, 44);
+
+			ones = (steps) % 10;
+			tens = (steps / 10) % 10;
+			hundreds = (steps / 100) % 10;
+			thous = (steps / 1000) % 10;
+			TDR_draw_number_sprite(ones, 80, 60);
+			TDR_draw_number_sprite(tens, 64, 60);
+			TDR_draw_number_sprite(hundreds, 48, 60);
+			TDR_draw_number_sprite(thous, 32, 60);
+		}
+
+		if (now - start2 > 400)
+		{
+			if (ADC_Data_Good[3] < 2500)
+			{
+				if (!battTick)
+				{
+					TDR_draw_string_RED("LOW!", (8 * 5), (127-32), 0);
+					//TLC5973_WriteChannels(&hTLC5973, 100, 0, 0);
+					battTick = true;
+				}
+				else
+				{
+					TDR_draw_string("     ", (8 * 5), (127-32), 0);
+					//TLC5973_WriteChannels(&hTLC5973, 0, 0, 0);
+					battTick = false;
+				}
+			}
+			start2 = now;
+		}
+		if (ADC_Data_Good[3] > 2700 && battTick)
+		{
+			TDR_draw_string("     ", (8 * 5), (127-32), 0);
+			//TLC5973_WriteChannels(&hTLC5973, 0, 0, 0);
+			battTick = false;
+		}
+
+
+		if (now - start > 1000) //DEBUG: FRAMERATE
+		{
+			TDR_draw_string("Batt", 0, (127 - 32), 0);
+			createBatteryString();
+			TDR_draw_string(usermessage,0,127-16,0);
+
+			uint8_t r,g,b = 0;
+			uint32_t timeBetweenSteps = HAL_GetTick() - oldStepTime;
+			if (timeBetweenSteps > 3000)
+			{
+				filtervalue[4] = 0;
+				stepsPerMinute = 0;
+				ones = (stepsPerMinute) % 10;
+				tens = (stepsPerMinute / 10) % 10;
+				hundreds = (stepsPerMinute / 100) % 10;
+				thous = (stepsPerMinute / 1000) % 10;
+				TDR_draw_number_sprite(ones, 80, 44);
+				TDR_draw_number_sprite(tens, 64, 44);
+				TDR_draw_number_sprite(hundreds, 48, 44);
+				TDR_draw_number_sprite(thous, 32, 44);
+				number_to_rgb(stepsPerMinute * 20, &r, &g, &b);
+				//if (ADC_Data_Good[3] > 3000 || ADC_Data_Good[3] < 30)
+				//{
+					TLC5973_WriteChannels(&hTLC5973, r, b, g);
+				//}
+			}
+			//display framecounter
+
 			start = now;
 			framecounter = 0;
 			TDR_TPS = 0;
@@ -817,6 +1023,8 @@ void ADXL_ST_Routine(void)
 
     uint8_t retry = 1;
 
+    GPIO_PinState buttonState = GPIO_PIN_RESET;
+
     while (retry)
     {
         // Normal mode
@@ -868,22 +1076,27 @@ void ADXL_ST_Routine(void)
             TDR_draw_string("SELF TEST PASS", 0, 0, 1);
 
             ST_Disable();
-            retry = 0;
         }
         else
         {
             //TDR_clear_screen();
             TDR_draw_string("SELF TEST FAIL", 0, 0, 1);
-
-            if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_RESET)
-            {
-                retry = 1;
-            }
-            else
-            {
-                ST_Disable();
-                retry = 0;
-            }
+        }
+        while(HAL_GPIO_ReadPin(GPIO_BUTTON2_GPIO_Port, GPIO_BUTTON2_Pin) == GPIO_PIN_RESET){}
+//        if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_SET)
+//        {
+//        	retry++;
+//        }
+//        else
+//        {
+//        	ST_Disable();
+//        	retry = 0;
+//        }
+        if (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) != buttonState)
+        {
+        	buttonState = HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin);
+        	retry++;
+        	if (retry > 3){return;}
         }
     }
 }
@@ -896,6 +1109,7 @@ HAL_StatusTypeDef DANGEROUS_flashtwo(int32_t first, int32_t second, uint32_t add
 		HAL_FLASH_Lock();
 		return status; // Write failed
 	}
+	return HAL_OK;
 }
 
 HAL_StatusTypeDef DANGEROUS_Flash_Calib_Data()
@@ -1002,6 +1216,7 @@ void ADXL_CALIB_Routine_once(uint32_t values[])
 	//		calib_data_RAM.x = sx;
 	//		calib_data_RAM.y = sy;
 	//		calib_data_RAM.z = sz;
+	return;
 
 }
 
@@ -1085,7 +1300,7 @@ void ADXL_CALIB_Routine()
 void number_to_rgb(uint16_t input, uint8_t *r, uint8_t *g, uint8_t *b) {
     // 1. Scale 0-4095 to 0-1535 (6 segments of 256 steps)
     // 4095 / 1535 = ~2.667
-	input = input%4096;
+	input = min(input,4095);
     uint16_t scaled = input / 3;
 
     // 2. Extract the segment (0 to 5) and phase/position within the segment (0 to 255)
@@ -1094,36 +1309,118 @@ void number_to_rgb(uint16_t input, uint8_t *r, uint8_t *g, uint8_t *b) {
 
     switch (segment) {
         case 0: // Red -> Yellow (Red=255, Green rises, Blue=0)
-            *r = 255;
-            *g = phase;
+            *r = 0;
+            *g = 0;
             *b = 0;
             break;
         case 1: // Yellow -> Green (Red falls, Green=255, Blue=0)
-            *r = 255 - phase;
-            *g = 255;
+            *r = 0;
+            *g = phase;
             *b = 0;
             break;
         case 2: // Green -> Cyan (Red=0, Green=255, Blue rises)
-            *r = 0;
+            *r = phase;
             *g = 255;
-            *b = phase;
+            *b = 0;
             break;
         case 3: // Cyan -> Blue (Red=0, Green falls, Blue=255)
-            *r = 0;
+            *r = 255;
             *g = 255 - phase;
-            *b = 255;
+            *b = 0;
             break;
         case 4: // Blue -> Magenta (Red rises, Green=0, Blue=255)
-            *r = phase;
+            *r = 255;
+            *g = 0;
+            *b = phase;
+            break;
+        case 5: // Magenta -> Red (Red=255, Green=0, Blue falls)
+            *r = 255 - phase;
             *g = 0;
             *b = 255;
             break;
-        case 5: // Magenta -> Red (Red=255, Green=0, Blue falls)
-            *r = 255;
-            *g = 0;
-            *b = 255 - phase;
-            break;
     }
+}
+
+void superbPongLoop()
+{
+	for (int i = 0; i < 10; i++)
+	{
+		EMS_ADC_READ_SMOOTHER();
+	}
+	int16_t paddleHeightM = 10;
+	uint16_t playerPaddle = (ADC_Data_Good[1] - calib_data_RAM_negative.y) * (133) / (calib_data_RAM_positive.y - calib_data_RAM_negative.y) -3;
+	uint16_t opponentPaddle = 64;
+	int16_t ballPosX = 63;
+	int16_t ballPosY = 63;
+	int16_t ballDirectionX = -1;
+	int16_t ballDirectionY = 1;
+	TDR_clear_screen();
+	uint32_t ticker = 0;
+
+	TDR_draw_square(0, playerPaddle - paddleHeightM, 1, paddleHeightM*2 +1, 0xFFFF);
+	TDR_draw_square(127, opponentPaddle - paddleHeightM, 1, paddleHeightM*2 +1, 0xFFFF);
+	TDR_draw_square(ballPosX, ballPosY, 2, 2, 0xFFFF);
+	HAL_Delay(2000);
+
+	while (HAL_GPIO_ReadPin(GPIO_BUTTON1_GPIO_Port, GPIO_BUTTON1_Pin) == GPIO_PIN_SET)
+	{
+		EMS_ADC_READ_SMOOTHER();
+		playerPaddle = (ADC_Data_Good[1] - calib_data_RAM_negative.y) * (133) / (calib_data_RAM_positive.y - calib_data_RAM_negative.y) -3;
+		playerPaddle = min((max(playerPaddle,10)),117);
+		opponentPaddle = min((max(opponentPaddle,10)),117);
+		//game tick
+		//first clear area
+
+		TDR_draw_square(ballPosX, ballPosY, 2, 2, 0x0000);
+
+		ballPosX += ballDirectionX;
+		ballPosY += ballDirectionY;
+		if (ballPosX > 127 || ballPosX < 0)
+		{
+			HAL_Delay(500);
+			opponentPaddle = HAL_GetTick()%64 + HAL_GetTick()%50;
+			ballPosX = 63;
+			ballPosY = 63;
+			ballDirectionX = ((HAL_GetTick()%2) * 2 - 1);
+			ballDirectionY = ((HAL_GetTick()/2) %2 * 2 - 1);
+		}
+		if (ballPosX > 124 && ballPosX < 127 && abs(ballPosY - opponentPaddle) < paddleHeightM)
+		{
+			ballDirectionX = -1;
+		}
+		if (ballPosX > 0 && ballPosX < 3 && abs(ballPosY - playerPaddle) < paddleHeightM)
+		{
+			ballDirectionX = 1;
+		}
+		if (ballPosY < 0)
+		{
+			ballDirectionY = 1;
+		}
+		if (ballPosY > 127)
+		{
+			ballDirectionY = -1;
+		}
+		TDR_draw_square(0, 0, 1, 127, 0x0000);
+		TDR_draw_square(0, playerPaddle - paddleHeightM, 1, paddleHeightM*2 +1, 0xFFFF);
+		TDR_draw_square(127, 0, 1, 127, 0x0000);
+		TDR_draw_square(127, opponentPaddle - paddleHeightM, 1, paddleHeightM*2 +1, 0xFFFF);
+		TDR_draw_square(ballPosX, ballPosY, 2, 2, 0xFFFF);
+		ticker++;
+		HAL_Delay(30);
+
+		if(HAL_GetTick()%14 != 0)
+		{
+			if (ballPosY < opponentPaddle)
+			{
+				opponentPaddle--;
+			}
+			else
+			{
+				opponentPaddle++;
+			}
+		}
+
+	}
 }
 
 /* USER CODE END 4 */

@@ -621,7 +621,56 @@ void TDR_draw_string(const char* s, int32_t startx, int32_t starty, uint8_t wrap
 	}
 }
 
+void TDR_draw_string_RED(const char* s, int32_t startx, int32_t starty, uint8_t wraparound) //half width characters
+{
 
+	int32_t ss_x = startx;
+	int32_t ss_y = starty;
+
+	int length = strlen(s);
+
+	uint32_t font_byte_size = TDR_HFONT_HEIGHT * TDR_HFONT_BWIDTH; //each character is 16 bytes, 8 bits wide * 16 tall
+
+	for (int i = 0; i < length; i++)
+	{
+		//newline
+		if (s[i] == '\n') {ss_x = startx; ss_y += 16; continue;}
+		//if (s[i] == '\0') {return;}
+		if (ss_y > 127) {break;}
+		if (ss_x > 121 && wraparound) { ss_x = 0; ss_y+=16; }
+		clearTileHalf();
+		uint32_t offset = (s[i]-32) * TDR_HFONT_HEIGHT * TDR_HFONT_BWIDTH;
+
+		for (uint8_t j = 0; j < font_byte_size; j++) //for each byte in FONT, each byte means 8 pixels in displayTile
+		{
+			for (uint8_t b = 0; b < 8; b++) //each bit in FONT, each bit means one pixel in displayTile
+			{
+				if (FONT_ASCII_HALF[j + offset] & (1 << b))
+				{
+					displayTile_backBuffer[(j * 8) + b] = TDR_COLOUR_RED;
+				}
+			}
+		}
+#if TDR_DMA_ENABLE
+		TDR_DMA_FIRE(ss_x, ss_y, TDR_HFONT_WIDTH, TDR_HFONT_HEIGHT, 1);
+#else
+		SSD1351_DrawImage(ss_x, ss_y, TDR_HFONT_WIDTH, TDR_HFONT_HEIGHT, displayTile_backBuffer);
+#endif
+		ss_x += 8;
+	}
+}
+
+void TDR_draw_square(uint16_t startx, uint16_t starty, uint16_t width, uint16_t height, uint16_t colour)
+{
+	clearTile();
+	uint16_t *ptr = (uint16_t *)displayTile_backBuffer;
+	for (int i = 0; i < 128; i++)
+	{
+		ptr[i] = colour;
+	}
+	TDR_DMA_FIRE(startx, starty, width, height, 1);
+
+}
 
 void TDR_clear_screen(void)
 {

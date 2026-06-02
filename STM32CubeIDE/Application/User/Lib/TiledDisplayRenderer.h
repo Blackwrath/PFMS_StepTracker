@@ -19,6 +19,7 @@
 //extern static uint16_t displayTile[256]; //always keep in RAM
 int32_t tan_approx(int32_t input);
 //void generateDrawBackgroundTile(uint32_t steps, uint32_t maxsteps, uint8_t tile_x, uint8_t tile_y);
+void TDR_draw_square(uint16_t startx, uint16_t starty, uint16_t width, uint16_t height, uint16_t colour);
 void TDR_draw_background_circle(uint32_t steps, uint32_t maxsteps);
 void TDR_draw_number_sprite(uint16_t number, uint8_t startx, uint8_t starty);
 void TDR_draw_number_small(int16_t number, uint8_t startx, uint8_t starty);

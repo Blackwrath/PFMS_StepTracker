@@ -38,13 +38,13 @@ typedef struct {
 #define TLC5973_T1_RATIO           0.45
 #define TLC5973_T0_RATIO           0.55
 
-static void DelayNOP_Cycles(uint32_t cycles);
-static void DelayNOP_us(uint32_t us);
-static void TLC5973_SendBit(TLC5973_HandleTypeDef *hdev, uint8_t bit_val);
-static void TLC5973_SendCycle(TLC5973_HandleTypeDef *hdev);
-
-static void TLC5973_SendEOS(TLC5973_HandleTypeDef *hdev);
-static void TLC5973_SendBits(TLC5973_HandleTypeDef *hdev, uint32_t data, uint32_t count);
+//static void DelayNOP_Cycles(uint32_t cycles);
+//static void DelayNOP_us(uint32_t us);
+//static void TLC5973_SendBit(TLC5973_HandleTypeDef *hdev, uint8_t bit_val);
+//static void TLC5973_SendCycle(TLC5973_HandleTypeDef *hdev);
+//
+//static void TLC5973_SendEOS(TLC5973_HandleTypeDef *hdev);
+//static void TLC5973_SendBits(TLC5973_HandleTypeDef *hdev, uint32_t data, uint32_t count);
 void TLC5973_Init(TLC5973_HandleTypeDef *hdev, GPIO_TypeDef *port, uint16_t pin, uint32_t tCYCLE_ns);
 void TLC5973_WriteChannels(TLC5973_HandleTypeDef *hdev, uint16_t ch0, uint16_t ch1, uint16_t ch2);
 void TLC5973_WriteRaw(TLC5973_HandleTypeDef *hdev, uint64_t data_46);
