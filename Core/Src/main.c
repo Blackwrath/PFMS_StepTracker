@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "ssd1351.h"
 #include "TiledDisplayRenderer.h"
 #include "tlc5973.h"
@@ -97,7 +98,7 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
 }
 
 // Called when buffer is completely filled
-# define ADC_BUFFER_SIZE 4 * 1
+# define ADC_BUFFER_SIZE 4 * 16
 
 volatile uint16_t ADC_Data[ADC_BUFFER_SIZE];
 volatile uint16_t ADC_Data_Good[4];
@@ -116,33 +117,40 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	{
 //		ADC_DATA_READY = 0;
 //		ADC_DATA_REQUEST = 0;
-//		for (int i = 0; i < ADC_BUFFER_SIZE; i++)
-//		{
-//			ADC_Data_Good[i] = ADC_Data[i];
-//		}
-//		ADC_Data_Good[0] = 0;
-//		ADC_Data_Good[1] = 0;
-//		ADC_Data_Good[2] = 0;
-//		ADC_Data_Good[3] = 0;
+		ADC_Data_Good[0] = 0;
+		ADC_Data_Good[1] = 0;
+		ADC_Data_Good[2] = 0;
+		ADC_Data_Good[3] = 0;
+		for (int i = 0; i < ADC_BUFFER_SIZE; i++)
+		{
+			ADC_Data_Good[i%4] += ADC_Data[i];
+		}
+
+//
+//		ADC_Data_Good[2] = ADC_Data[0];
+//		ADC_Data_Good[1] = ADC_Data[1];
+//		ADC_Data_Good[0] = ADC_Data[2]; //fix here: reorder data from ZYXB to XYZB
+//		ADC_Data_Good[3] = ADC_Data[3];
 
 
-		ADC_Data_Good[2] = ADC_Data[0];
-		ADC_Data_Good[1] = ADC_Data[1];
-		ADC_Data_Good[0] = ADC_Data[2]; //fix here: reorder data from ZYXB to XYZB
-		ADC_Data_Good[3] = ADC_Data[3];
+		ADC_Data_Good[0] = ADC_Data_Good[0] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Good[1] = ADC_Data_Good[1] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Good[2] = ADC_Data_Good[2] / (ADC_BUFFER_SIZE / 4);
+		ADC_Data_Good[3] = ADC_Data_Good[3] / (ADC_BUFFER_SIZE / 4);
 
-
-//		ADC_Data_Good[0] = ADC_Data_Good[0] / (ADC_BUFFER_SIZE / 4);
-//		ADC_Data_Good[1] = ADC_Data_Good[1] / (ADC_BUFFER_SIZE / 4);
-//		ADC_Data_Good[2] = ADC_Data_Good[2] / (ADC_BUFFER_SIZE / 4);
-//		ADC_Data_Good[3] = ADC_Data_Good[3] / (ADC_BUFFER_SIZE / 4);
-
+		uint16_t temp = ADC_Data_Good[0];
+		ADC_Data_Good[0] = ADC_Data_Good[2];
+		ADC_Data_Good[2] = temp;
 
 		ADC_DATA_READY = 1;
 
 
 		//data averaging
 	}
+}
+
+static inline int max(int a, int b) {
+    return (a > b) ? a : b;
 }
 
 void EMS_ADC_READ() //triggers read into ADC_Data_Good, waits for return
@@ -184,8 +192,9 @@ int main(void)
   MX_DMA_Init();
   MX_SPI1_Init();
   MX_ADC1_Init();
-  MX_TIM1_Init();
   HAL_ADCEx_Calibration_Start(&hadc1);
+  MX_TIM1_Init();
+
   /* USER CODE BEGIN 2 */
   HAL_Delay(300);
   SSD1351_Unselect();
@@ -210,8 +219,6 @@ int main(void)
 
 
 
-
-
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Data, ADC_BUFFER_SIZE);
 
 	HAL_TIM_Base_Start(&htim1);
@@ -224,20 +231,20 @@ int main(void)
 	HAL_Delay(300);
 	sprintf(usermessage, "%u", calib_data_FLASH.x);
 	TDR_draw_string(usermessage, 0, 16, 0);
-	HAL_Delay(300);
+	HAL_Delay(50);
 	sprintf(usermessage, "%u", calib_data_FLASH.y);
 	TDR_draw_string(usermessage, 0, 32, 0);
-	HAL_Delay(300);
+	HAL_Delay(50);
 	sprintf(usermessage, "%u", calib_data_FLASH.z);
 	TDR_draw_string(usermessage, 0, 48, 0);
-	HAL_Delay(300);
+	HAL_Delay(50);
 
 	calib_data_RAM.x = calib_data_FLASH.x;
 	calib_data_RAM.y = calib_data_FLASH.y;
 	calib_data_RAM.z = calib_data_FLASH.z;
 	TDR_draw_string("Loaded!", 0, 64, 0);
 
-	HAL_Delay(1000);
+	HAL_Delay(200);
 	TDR_clear_screen();
 
 	/* Write Channels: Ch0=Full, Ch1=Half, Ch2=Off */
@@ -296,13 +303,14 @@ int main(void)
 			steps = 0;
 		}
 
+
 		//colours to calib data
 		int32_t cx,cy,cz;
 		cx = abs((int32_t)ADC_Data_Good[0] - calib_data_RAM.x);
 		cy = abs((int32_t)ADC_Data_Good[1] - calib_data_RAM.y);
 		cz = abs((int32_t)ADC_Data_Good[2] - calib_data_RAM.z);
 
-		TLC5973_WriteChannels(&hTLC5973, cx,cy,cz);
+		TLC5973_WriteChannels(&hTLC5973, max(cx-200,0),max(cy-200,0),(cz-200,0));
 
 		TDR_draw_background_circle(steps, maxsteps);
 
@@ -462,10 +470,10 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
-  hadc1.Init.OversamplingMode = ENABLE;
-  hadc1.Init.Oversampling.Ratio = 16;
-  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_5;
-  hadc1.Init.Oversampling.TriggeredMode = ADC_TRIGGEREDMODE_MULTI_TRIGGER;
+  hadc1.Init.OversamplingMode = DISABLE;
+  hadc1.Init.Oversampling.Ratio = 1;
+  hadc1.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_NONE;
+  hadc1.Init.Oversampling.TriggeredMode = ADC_TRIGGEREDMODE_SINGLE_TRIGGER;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
