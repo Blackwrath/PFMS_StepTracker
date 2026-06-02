@@ -65,6 +65,7 @@ __attribute__((section(".rodata"))) const uint8_t FONT_ASCII_HALF[] = {0x00,0x00
 
 const int TAN_LOOKUP_65536[102] = {-2147483648, -2106256, -1052108, -700272, -524013, -417984, -347069, -296219, -257908, -227956, -203854, -184006, -167347, -153140, -140860, -130118, -120627, -112164, -104557, -97669, -91392, -85637, -80332, -75416, -70841, -66563, -62547, -58763, -55184, -51788, -48555, -45468, -42511, -39671, -36936, -34296, -31740, -29259, -26847, -24496, -22199, -19949, -17742, -15572, -13433, -11322, -9233, -7163, -5106, -3059, -1019, 1019, 3059, 5106, 7163, 9233, 11322, 13433, 15572, 17742, 19949, 22199, 24496, 26847, 29259, 31740, 34296, 36936, 39671, 42511, 45468, 48555, 51788, 55184, 58763, 62547, 66563, 70841, 75416, 80332, 85637, 91392, 97669, 104557, 112164, 120627, 130118, 140860, 153140, 167347, 184006, 203854, 227956, 257908, 296219, 347069, 417984, 524013, 700272, 1052108, 2106256, -2147483647};
 
+uint8_t circleInvalidated = 0;
 
 # define TDR_LIGHTNING_ENABLE 1
 #if TDR_LIGHTNING_ENABLE
@@ -255,6 +256,7 @@ static void TDR_drawtile_circle_progress(uint32_t steps, uint32_t maxsteps, uint
 	int32_t ss_y = 0;
 	int32_t ss_x = 0;
 	uint8_t drawnPixel = 0;
+	if (circleInvalidated) {quadrant = 1;}
 
 	switch (quadrant) {
 	case 1:
@@ -282,10 +284,11 @@ static void TDR_drawtile_circle_progress(uint32_t steps, uint32_t maxsteps, uint
 				}
 			}
 		}
+		if (circleInvalidated == 0)
+		{
+			break;
+		}
 
-
-
-		break;
 	case 2:
 		for (int32_t tile_y = 0; tile_y <= 15; tile_y++) //height
 		{
@@ -307,8 +310,10 @@ static void TDR_drawtile_circle_progress(uint32_t steps, uint32_t maxsteps, uint
 
 			}
 		}
-
-		break;
+		if (circleInvalidated == 0)
+		{
+			break;
+		}
 	case 3:
 		for (int32_t tile_y = 0; tile_y <= 15; tile_y++)
 		{
@@ -335,7 +340,10 @@ static void TDR_drawtile_circle_progress(uint32_t steps, uint32_t maxsteps, uint
 			}
 		}
 
-		break;
+		if (circleInvalidated == 0)
+		{
+			break;
+		}
 
 	case 4:
 		for (int32_t tile_y = 0; tile_y <= 15; tile_y++)
@@ -374,6 +382,7 @@ static void TDR_drawtile_circle_progress(uint32_t steps, uint32_t maxsteps, uint
 	{
 		TDR_DMA_FIRE(ss_start_x, ss_start_y, 16, 16, 1);
 		backgroundTile_score[tile_y_f * 8 + tile_x_f] = drawnPixel;
+		circleInvalidated = 0;
 	}
 #else
 	SSD1351_DrawImage(ss_start_x, ss_start_y, 16, 16, displayTile_backBuffer);
@@ -617,6 +626,12 @@ void TDR_draw_string(const char* s, int32_t startx, int32_t starty, uint8_t wrap
 void TDR_clear_screen(void)
 {
 	TDR_render_background_solid(0x0000);
+	circleInvalidated = 1;
+	uint32_t *ptr = (uint32_t*)backgroundTile_score;
+	for (int i = 0; i < 16; i++)
+	{
+		ptr[i] = 0;
+	}
 }
 
 
