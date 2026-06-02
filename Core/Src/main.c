@@ -105,6 +105,9 @@ volatile char usermessage[24];
 
 volatile char ADC_DATA_REQUEST = 0;
 volatile char ADC_DATA_READY = 0;
+
+Vector3 calib_data = {.x=0,.y=0,.z=0};
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 //	char data[4];
 //	itoa(ADC_Data[0], data, 10);
@@ -217,7 +220,7 @@ int main(void)
 
 	/* Write Channels: Ch0=Full, Ch1=Half, Ch2=Off */
 	/* 12-bit range: 0 to 4095 */
-	TLC5973_WriteChannels(&hTLC5973, 4095, 4095, 4095);
+	//TLC5973_WriteChannels(&hTLC5973, 4095, 4095, 4095);
 
 #ifdef DEBUG
 	int32_t debug_ticker = 0;
@@ -237,6 +240,17 @@ int main(void)
 
 		    HAL_Delay(1000);   // Let user see result
 		    TDR_clear_screen(); // Clear before resuming
+		}
+		/*********************************************************************************/
+
+		/***************************Calibration Sequence**********************************/
+		if (HAL_GPIO_ReadPin(GPIO_BUTTON2_GPIO_Port, GPIO_BUTTON2_Pin) == GPIO_PIN_RESET)
+		{
+			TDR_clear_screen(); // Clear before resuming
+			ADXL_CALIB_Routine();
+
+			HAL_Delay(1000);   // Let user see result
+			TDR_clear_screen(); // Clear before resuming
 		}
 		/*********************************************************************************/
 		/* USER CODE END WHILE */
@@ -260,7 +274,13 @@ int main(void)
 			steps = 0;
 		}
 
-		TLC5973_WriteChannels(&hTLC5973, 4000,4000,4000);
+		//colours to calib data
+		int32_t cx,cy,cz;
+		cx = abs((int32_t)ADC_Data_Good[0] - calib_data.x);
+		cy = abs((int32_t)ADC_Data_Good[1] - calib_data.y);
+		cz = abs((int32_t)ADC_Data_Good[2] - calib_data.z);
+
+		TLC5973_WriteChannels(&hTLC5973, cx,cy,cz);
 
 		TDR_draw_background_circle(steps, maxsteps);
 
@@ -432,7 +452,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Channel = ADC_CHANNEL_4; //Z channel
   sConfig.Rank = ADC_REGULAR_RANK_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -441,7 +461,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Channel = ADC_CHANNEL_5; //Y channel
   sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -450,7 +470,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Channel = ADC_CHANNEL_6; //X channel
   sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -459,7 +479,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_7;
+  sConfig.Channel = ADC_CHANNEL_7; //BAT channel
   sConfig.Rank = ADC_REGULAR_RANK_4;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -762,6 +782,106 @@ void ADXL_ST_Routine(void)
                 retry = 0;
             }
         }
+    }
+}
+
+void ADXL_CALIB_Routine()
+{
+	TDR_draw_string("Please place the\ndevice on a flat\nsurface, with\nthe screen\npointing upwards", 0, 0, 1);
+	for(int8_t ticker = 5; ticker > 0; ticker--)
+	{
+		TDR_draw_number_sprite(ticker, 111, 111);
+		HAL_Delay(1000);
+	}
+	//start sampling data
+	uint32_t sx = 0;
+	uint32_t sy = 0;
+	uint32_t sz = 0;
+	char buffer[32];
+	TDR_clear_screen();
+	uint32_t samplecount = 1;
+	for (samplecount = 1; samplecount <= 1024; samplecount++)
+	{
+		EMS_ADC_READ();
+
+		sx += ADC_Data_Good[0];
+		sy += ADC_Data_Good[1];
+		sz += ADC_Data_Good[2];
+		if (samplecount%16 == 0)
+		{
+
+			sprintf(buffer, "Samples: %u", samplecount);
+			TDR_draw_string(buffer, 0, 48-16,0);
+			sprintf(buffer, "X: %u", sx);
+			TDR_draw_string(buffer, 48, 48, 0);
+			sprintf(buffer, "Y: %u", sy);
+			TDR_draw_string(buffer, 48, 48+16, 0);
+			sprintf(buffer, "Z: %u", sz);
+			TDR_draw_string(buffer, 48, 48+32, 0);
+		}
+	}
+	TDR_clear_screen();
+	HAL_Delay(500);
+	sx /= samplecount;
+	sy /= samplecount;
+	sz /= samplecount;
+	sprintf(buffer, "Average:");
+	TDR_draw_string(buffer, 0, 48-16,0);
+	sprintf(buffer, "X: %u", sx);
+	TDR_draw_string(buffer, 48, 48, 0);
+	sprintf(buffer, "Y: %u", sy);
+	TDR_draw_string(buffer, 48, 48+16, 0);
+	sprintf(buffer, "Z: %u", sz);
+	TDR_draw_string(buffer, 48, 48+32, 0);
+	HAL_Delay(100);
+	TDR_draw_string("saved to\ncalib_data...",0,48+48,0);
+	calib_data.x = sx;
+	calib_data.y = sy;
+	calib_data.z = sz;
+	HAL_Delay(500);
+}
+
+void number_to_rgb(uint16_t input, uint8_t *r, uint8_t *g, uint8_t *b) {
+    // 1. Scale 0-4095 to 0-1535 (6 segments of 256 steps)
+    // 4095 / 1535 = ~2.667
+	input = input%4096;
+    uint16_t scaled = input / 3;
+
+    // 2. Extract the segment (0 to 5) and phase/position within the segment (0 to 255)
+    uint8_t segment = scaled / 256;
+    uint8_t phase = scaled % 256;
+
+    switch (segment) {
+        case 0: // Red -> Yellow (Red=255, Green rises, Blue=0)
+            *r = 255;
+            *g = phase;
+            *b = 0;
+            break;
+        case 1: // Yellow -> Green (Red falls, Green=255, Blue=0)
+            *r = 255 - phase;
+            *g = 255;
+            *b = 0;
+            break;
+        case 2: // Green -> Cyan (Red=0, Green=255, Blue rises)
+            *r = 0;
+            *g = 255;
+            *b = phase;
+            break;
+        case 3: // Cyan -> Blue (Red=0, Green falls, Blue=255)
+            *r = 0;
+            *g = 255 - phase;
+            *b = 255;
+            break;
+        case 4: // Blue -> Magenta (Red rises, Green=0, Blue=255)
+            *r = phase;
+            *g = 0;
+            *b = 255;
+            break;
+        case 5: // Magenta -> Red (Red=255, Green=0, Blue falls)
+            *r = 255;
+            *g = 0;
+            *b = 255 - phase;
+            break;
     }
 }
 
